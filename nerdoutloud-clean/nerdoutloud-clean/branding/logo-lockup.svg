@@ -1,0 +1,57 @@
+<svg width="1200" height="360" viewBox="0 0 1200 360" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bgGlow2" cx="30%" cy="45%" r="80%">
+      <stop offset="0%" stop-color="#1B2040" />
+      <stop offset="100%" stop-color="#0D0F1E" />
+    </radialGradient>
+    <linearGradient id="ticketGrad2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFF8EC" />
+      <stop offset="100%" stop-color="#F3EBDA" />
+    </linearGradient>
+    <clipPath id="bucketClip2">
+      <path d="M52 148 L228 148 L208 300 L72 300 Z" />
+    </clipPath>
+  </defs>
+
+  <rect width="1200" height="360" fill="url(#bgGlow2)" />
+
+  <!-- marquee bulb rows -->
+  <g fill="#FFB627">
+    <circle cx="60" cy="40" r="5" opacity="0.9" /><circle cx="90" cy="40" r="5" opacity="0.5" />
+    <circle cx="120" cy="40" r="5" opacity="0.9" /><circle cx="150" cy="40" r="5" opacity="0.5" />
+    <circle cx="180" cy="40" r="5" opacity="0.9" /><circle cx="210" cy="40" r="5" opacity="0.5" />
+  </g>
+  <g fill="#FFB627">
+    <circle cx="990" cy="320" r="5" opacity="0.5" /><circle cx="1020" cy="320" r="5" opacity="0.9" />
+    <circle cx="1050" cy="320" r="5" opacity="0.5" /><circle cx="1080" cy="320" r="5" opacity="0.9" />
+    <circle cx="1110" cy="320" r="5" opacity="0.5" /><circle cx="1140" cy="320" r="5" opacity="0.9" />
+  </g>
+
+  <!-- ticket + popcorn mark, scaled down, left side -->
+  <g transform="translate(30, 60) scale(0.62)">
+    <rect x="0" y="60" width="320" height="220" rx="14" fill="url(#ticketGrad2)" />
+    <circle cx="0" cy="170" r="16" fill="#0D0F1E" />
+    <circle cx="320" cy="170" r="16" fill="#0D0F1E" />
+    <line x1="54" y1="60" x2="54" y2="280" stroke="#D8CBAF" stroke-width="3" stroke-dasharray="6 7" />
+    <g transform="translate(-36, 4)">
+      <circle cx="228" cy="106" r="15" fill="#F3D98C" /><circle cx="256" cy="92" r="18" fill="#FFF3D6" />
+      <circle cx="286" cy="108" r="15" fill="#F3D98C" /><circle cx="242" cy="122" r="14" fill="#FFF3D6" />
+      <circle cx="270" cy="120" r="14" fill="#F6E7B8" /><circle cx="212" cy="126" r="11" fill="#F6E7B8" />
+      <circle cx="300" cy="128" r="11" fill="#FFF3D6" /><circle cx="256" cy="110" r="12" fill="#FBE9BF" />
+      <rect x="180" y="142" width="152" height="16" rx="6" fill="#E4572E" />
+      <rect x="180" y="142" width="152" height="7" rx="3" fill="#F0693F" />
+      <g clip-path="url(#bucketClip2)">
+        <rect x="158" y="146" width="196" height="164" fill="#F3EBDA" />
+        <rect x="180" y="146" width="22" height="164" fill="#E4572E" />
+        <rect x="222" y="146" width="22" height="164" fill="#E4572E" />
+        <rect x="264" y="146" width="22" height="164" fill="#E4572E" />
+        <rect x="306" y="146" width="22" height="164" fill="#E4572E" />
+        <rect x="158" y="288" width="196" height="22" fill="rgba(0,0,0,0.14)" />
+      </g>
+    </g>
+  </g>
+
+  <!-- wordmark -->
+  <text x="330" y="205" font-family="Bebas Neue" font-size="112" letter-spacing="4" fill="#F0F1FA">NERD<tspan fill="#FFB627">OUT</tspan>LOUD</text>
+  <text x="333" y="248" font-family="Bebas Neue" font-size="26" letter-spacing="14" fill="#9CA2C7">STOP SCROLLING &#183; START WATCHING</text>
+</svg>

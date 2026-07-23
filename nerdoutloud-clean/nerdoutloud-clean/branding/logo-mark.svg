@@ -1,0 +1,61 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bgGlow" cx="50%" cy="38%" r="65%">
+      <stop offset="0%" stop-color="#1B2040" />
+      <stop offset="100%" stop-color="#0D0F1E" />
+    </radialGradient>
+    <linearGradient id="ticketGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFF8EC" />
+      <stop offset="100%" stop-color="#F3EBDA" />
+    </linearGradient>
+    <clipPath id="bucketClip">
+      <path d="M158 236 L354 236 L332 400 L180 400 Z" />
+    </clipPath>
+  </defs>
+
+  <!-- background -->
+  <rect width="512" height="512" rx="96" fill="url(#bgGlow)" />
+
+  <!-- soft amber halo behind the mark -->
+  <circle cx="256" cy="250" r="168" fill="#FFB627" opacity="0.08" />
+
+  <!-- ticket stub -->
+  <g>
+    <rect x="96" y="150" width="320" height="220" rx="14" fill="url(#ticketGrad)" />
+    <circle cx="96" cy="260" r="16" fill="#0D0F1E" />
+    <circle cx="416" cy="260" r="16" fill="#0D0F1E" />
+    <!-- perforation -->
+    <line x1="150" y1="150" x2="150" y2="370" stroke="#D8CBAF" stroke-width="3" stroke-dasharray="6 7" />
+    <!-- ticket left label -->
+    <text x="123" y="200" font-family="Georgia, serif" font-size="15" font-weight="700" fill="#6B6350" text-anchor="middle" transform="rotate(-90 123 200)" letter-spacing="3">ADMIT ONE</text>
+    <text x="123" y="330" font-family="Georgia, serif" font-size="15" font-weight="700" fill="#6B6350" text-anchor="middle" transform="rotate(-90 123 330)" letter-spacing="3">ADMIT ONE</text>
+  </g>
+
+  <!-- popcorn bucket, centered on the ticket's right field -->
+  <g transform="translate(60,-6)">
+    <!-- kernels -->
+    <circle cx="228" cy="196" r="15" fill="#F3D98C" />
+    <circle cx="256" cy="182" r="18" fill="#FFF3D6" />
+    <circle cx="286" cy="198" r="15" fill="#F3D98C" />
+    <circle cx="242" cy="212" r="14" fill="#FFF3D6" />
+    <circle cx="270" cy="210" r="14" fill="#F6E7B8" />
+    <circle cx="212" cy="216" r="11" fill="#F6E7B8" />
+    <circle cx="300" cy="218" r="11" fill="#FFF3D6" />
+    <circle cx="256" cy="200" r="12" fill="#FBE9BF" />
+    <!-- bucket band -->
+    <rect x="180" y="232" width="152" height="16" rx="6" fill="#E4572E" />
+    <rect x="180" y="232" width="152" height="7" rx="3" fill="#F0693F" />
+    <!-- striped bucket body -->
+    <g clip-path="url(#bucketClip)">
+      <rect x="158" y="236" width="196" height="164" fill="#F3EBDA" />
+      <rect x="180" y="236" width="22" height="164" fill="#E4572E" />
+      <rect x="222" y="236" width="22" height="164" fill="#E4572E" />
+      <rect x="264" y="236" width="22" height="164" fill="#E4572E" />
+      <rect x="306" y="236" width="22" height="164" fill="#E4572E" />
+      <rect x="158" y="378" width="196" height="22" fill="rgba(0,0,0,0.14)" />
+    </g>
+  </g>
+
+  <!-- amber ticket-tear accent, bottom right -->
+  <path d="M416 370 L440 394 L416 394 Z" fill="#FFB627" opacity="0.85" />
+</svg>

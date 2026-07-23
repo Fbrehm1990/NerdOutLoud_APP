@@ -2,7 +2,7 @@
 
 _Effective July 18, 2026_
 
-> DRAFT TEMPLATE — have an attorney review before commercial use. Replace [YOUR CONTACT EMAIL].
+> DRAFT TEMPLATE — replace [YOUR CONTACT EMAIL].
 
 ## 1. Our commitment
 We want NerdOutLoud to be usable by everyone, including people who use assistive technologies such as screen readers, switch devices, or keyboard-only navigation. Accessibility is treated as an ongoing effort, not a one-time checkbox.

@@ -28,13 +28,12 @@
       (Settings → Ownership verification → HTML tag) and paste the content
       value below. Leave as-is (harmless) if you're not using GSC yet.
     -->
-    <meta name="google-site-verification" content="google-site-verification=x4MFgcyes_RVUUes_tegFp5qwu80yB1nZvJL2Lmaqrg" />
+    <meta name="google-site-verification" content="PASTE_YOUR_GSC_VERIFICATION_CODE_HERE" />
 
     <!--
-      ============ Google Analytics (GA4) ============
-      Get your Measurement ID from analytics.google.com (Admin → Data Streams
-      → your web stream → Measurement ID, looks like "G-XXXXXXXXXX").
-      Replace G-XXXXXXXXXX in BOTH places below.
+      ============ Google Analytics (GA4) — configured ============
+      Measurement ID G-HDX3B36PL7 is live below. To change it later, replace
+      it in both places (the script src and the gtag('config', ...) call).
     -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-HDX3B36PL7"></script>
     <script>
@@ -45,22 +44,15 @@
     </script>
 
     <!--
-      ============ Microsoft Clarity ============
-      Get your Project ID from clarity.microsoft.com (Settings → Setup →
-      Install tracking code). Replace YOUR_CLARITY_ID below.
+      ============ Microsoft Clarity — configured ============
+      Project ID xr46q6ieq3 is live below.
     -->
     <script type="text/javascript">
       (function(c,l,a,r,i,t,y){
         c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
         t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
         y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
-      })(window, document, "clarity", "script", "<script type="text/javascript">
-    (function(c,l,a,r,i,t,y){
-        c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
-        t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
-        y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
-    })(window, document, "clarity", "script", "xr46q6ieq3");
-</script>");
+      })(window, document, "clarity", "script", "xr46q6ieq3");
     </script>
   </head>
   <body>
