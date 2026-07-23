@@ -1,0 +1,13 @@
+{
+  "name": "NerdOutLoud",
+  "short_name": "NerdOutLoud",
+  "description": "Stop scrolling. Start watching. NerdOutLoud picks your movie and gets you talking about it with Nerdmunity.",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#0D0F1E",
+  "theme_color": "#0D0F1E",
+  "icons": [
+    { "src": "/logo-mark-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/logo-mark-1024.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any" }
+  ]
+}
