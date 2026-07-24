@@ -942,7 +942,7 @@ function TopBar({ goHome, openMenu, nightActive, unreadCount, onOpenNotifs }) {
   );
 }
 
-function NotifPanel({ open, close, notifications, onClickNotif, onMarkAllRead }) {
+function NotifPanel({ open, close, notifications, onClickNotif, onDismiss, onMarkAllRead }) {
   if (!open) return null;
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 40 }}>
@@ -959,28 +959,33 @@ function NotifPanel({ open, close, notifications, onClickNotif, onMarkAllRead })
           position: "sticky", top: 0,
         }}>
           <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 18, letterSpacing: "0.12em", color: C.amber }}>Notifications</span>
-          {notifications.some(n => !n.read) && (
-            <span className="nol-danger-link" style={{ fontSize: 12 }} onClick={onMarkAllRead}>Mark all read</span>
+          {notifications.length > 0 && (
+            <span className="nol-danger-link" style={{ fontSize: 12 }} onClick={onMarkAllRead}>Clear all</span>
           )}
         </div>
         {notifications.length === 0 ? (
           <p style={{ color: C.muted, fontSize: 13, padding: "20px 18px", margin: 0, textAlign: "center" }}>
-            Nothing yet — new comments, replies, and movie drops will show up here.
+            You're all caught up — new comments, replies, and movie drops will show up here.
           </p>
         ) : (
           notifications.map((n, i) => (
-            <div key={n.id} className="nol-row" onClick={() => onClickNotif(n)} style={{
-              padding: "12px 18px", cursor: "pointer", borderBottom: i < notifications.length - 1 ? `1px solid ${C.edge}` : "none",
-              background: n.read ? "transparent" : "rgba(255,182,39,0.05)",
+            <div key={n.id} className="nol-row" style={{
+              display: "flex", alignItems: "flex-start", gap: 8, padding: "12px 18px",
+              borderBottom: i < notifications.length - 1 ? `1px solid ${C.edge}` : "none",
+              background: "rgba(255,182,39,0.05)",
             }}>
-              <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
-                {!n.read && <span style={{ width: 6, height: 6, borderRadius: "50%", background: C.amber, flexShrink: 0 }} />}
-                <span style={{ fontSize: 13, fontWeight: 700, color: C.text, lineHeight: 1.4 }}>{n.title}</span>
+              <div onClick={() => onClickNotif(n)} style={{ flex: 1, minWidth: 0, cursor: "pointer" }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: C.amber, flexShrink: 0 }} />
+                  <span style={{ fontSize: 13, fontWeight: 700, color: C.text, lineHeight: 1.4 }}>{n.title}</span>
+                </div>
+                {n.sub && <div style={{ color: C.muted, fontSize: 12.5, marginTop: 3, marginLeft: 14, lineHeight: 1.5 }}>{n.sub}</div>}
+                <div style={{ color: C.faint, fontSize: 11, marginTop: 4, marginLeft: 14 }}>
+                  {new Date(n.ts).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                </div>
               </div>
-              {n.sub && <div style={{ color: C.muted, fontSize: 12.5, marginTop: 3, marginLeft: n.read ? 0 : 14, lineHeight: 1.5 }}>{n.sub}</div>}
-              <div style={{ color: C.faint, fontSize: 11, marginTop: 4, marginLeft: n.read ? 0 : 14 }}>
-                {new Date(n.ts).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
-              </div>
+              <span className="nol-danger-link" style={{ fontSize: 16, flexShrink: 0, padding: "0 2px" }}
+                onClick={(e) => { e.stopPropagation(); onDismiss(n); }} aria-label="Dismiss">✕</span>
             </div>
           ))
         )}
@@ -3601,9 +3606,9 @@ export default function NerdOutLoud() {
     return () => { cancelled = true; };
   }, [state == null]);
 
-  const markAllRead = () => setState(s => s ? { ...s, notifications: (s.notifications || []).map(n => ({ ...n, read: true })) } : s);
+  const markAllRead = () => setState(s => s ? { ...s, notifications: [] } : s);
   const onClickNotif = (n) => {
-    setState(s => s ? { ...s, notifications: (s.notifications || []).map(x => x.id === n.id ? { ...x, read: true } : x) } : s);
+    setState(s => s ? { ...s, notifications: (s.notifications || []).filter(x => x.id !== n.id) } : s);
     setNotifOpen(false);
     if (n.filmSlug) {
       const f = state.films.find(f2 => slugify(f2.n) === n.filmSlug);
@@ -3630,9 +3635,10 @@ export default function NerdOutLoud() {
     <div className="nol-root" style={{ paddingBottom: 30 }}>
       <style>{GLOBAL_CSS}</style>
       <TopBar goHome={() => setView("home")} openMenu={() => setMenuOpen(true)} nightActive={!!state.night}
-        unreadCount={notifications.filter(n => !n.read).length} onOpenNotifs={cloud.enabled() ? () => setNotifOpen(true) : null} />
+        unreadCount={notifications.length} onOpenNotifs={cloud.enabled() ? () => setNotifOpen(true) : null} />
       <NotifPanel open={notifOpen} close={() => setNotifOpen(false)} notifications={notifications}
-        onClickNotif={onClickNotif} onMarkAllRead={markAllRead} />
+        onClickNotif={onClickNotif} onDismiss={(n) => setState(s => s ? { ...s, notifications: (s.notifications || []).filter(x => x.id !== n.id) } : s)}
+        onMarkAllRead={markAllRead} />
       <Menu open={menuOpen} close={() => setMenuOpen(false)} view={view} nightActive={!!state.night} state={state} user={user}
         go={(k) => {
           if (k === "account-signup") { setAccountMode("signup"); setView("account"); }
