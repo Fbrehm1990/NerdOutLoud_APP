@@ -679,12 +679,22 @@ const GLOBAL_CSS = `
 input[type=range].nol-range { -webkit-appearance: none; appearance: none; height: 4px; border-radius: 2px; background: ${C.edge}; cursor: pointer; }
 input[type=range].nol-range::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: ${C.amber}; border: 2px solid #14120A; box-shadow: 0 0 8px rgba(255,182,39,0.5); }
 input[type=range].nol-range::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: ${C.amber}; border: 2px solid #14120A; }
+.nol-dual-range { position: relative; height: 22px; display: flex; align-items: center; }
+.nol-dual-range .track-bg { position: absolute; left: 0; right: 0; height: 4px; border-radius: 2px; background: ${C.edge}; }
+.nol-dual-range .track-fill { position: absolute; height: 4px; border-radius: 2px; background: ${C.amber}; }
+.nol-dual-range input[type=range] { position: absolute; left: 0; right: 0; width: 100%; margin: 0; background: transparent; pointer-events: none; -webkit-appearance: none; appearance: none; height: 22px; }
+.nol-dual-range input[type=range]::-webkit-slider-runnable-track { background: transparent; height: 22px; }
+.nol-dual-range input[type=range]::-moz-range-track { background: transparent; height: 22px; }
+.nol-dual-range input[type=range]::-webkit-slider-thumb { pointer-events: auto; -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: ${C.amber}; border: 2px solid #14120A; box-shadow: 0 0 8px rgba(255,182,39,0.5); cursor: pointer; margin-top: 0; }
+.nol-dual-range input[type=range]::-moz-range-thumb { pointer-events: auto; width: 18px; height: 18px; border-radius: 50%; background: ${C.amber}; border: 2px solid #14120A; cursor: pointer; }
 @media (prefers-reduced-motion: reduce) { .nol-bulb, .nol-fade { animation: none !important; } .nol-ticket:hover, .nol-btn:hover, .nol-source:hover { transform: none; } }
 .nol-btn, .nol-ghost, .nol-chip, .nol-seg, .nol-source, .nol-ticket, .nol-burger, .nol-menu-item { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 @media (pointer: coarse) {
   input[type=range].nol-range { height: 6px; }
   input[type=range].nol-range::-webkit-slider-thumb { width: 26px; height: 26px; }
   input[type=range].nol-range::-moz-range-thumb { width: 26px; height: 26px; }
+  .nol-dual-range input[type=range]::-webkit-slider-thumb { width: 26px; height: 26px; }
+  .nol-dual-range input[type=range]::-moz-range-thumb { width: 26px; height: 26px; }
   .nol-chip { padding: 9px 16px; }
   .nol-danger-link { padding: 6px 4px; display: inline-block; }
 }
@@ -1040,13 +1050,7 @@ function Marquee() {
         }}>
           The fastest way to decide what to watch tonight.
         </p>
-        <p style={{
-          margin: "6px 0 0", color: C.amberSoft, fontSize: 12.5, fontStyle: "italic",
-          textAlign: "center", maxWidth: 380, marginLeft: "auto", marginRight: "auto", lineHeight: 1.4,
-        }}>
-          We pick your movie. You call your rating. Nerdmunity settles the debate.
-        </p>
-        <div style={{ display: "flex", justifyContent: "center", gap: 10, marginTop: 10 }}>
+        <div style={{ display: "flex", justifyContent: "center", gap: 10, marginTop: 12 }}>
           {[...Array(11)].map((_, i) => (
             <span key={i} className="nol-bulb" style={{ animationDelay: `${((i + 2) % 4) * 0.4}s` }} />
           ))}
@@ -1103,6 +1107,24 @@ function RatingSlider({ value, onChange, color }) {
       <input type="range" className="nol-range" min="1" max="10" step="0.5" value={value}
         onChange={e => onChange(Number(e.target.value))} style={{ flex: "1 1 160px", maxWidth: 260 }} />
       <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 30, color: color || C.amber, width: 48 }}>{value.toFixed(1)}</span>
+    </div>
+  );
+}
+
+// Two real, independently-draggable thumbs on one track — the standard technique
+// of two overlapping native range inputs with pointer-events limited to each thumb.
+function DualRangeSlider({ min, max, step, lo, hi, onChange, disabled }) {
+  const pct = (v) => ((v - min) / (max - min)) * 100;
+  const setLo = (v) => onChange([Math.min(Number(v), hi), hi]);
+  const setHi = (v) => onChange([lo, Math.max(Number(v), lo)]);
+  return (
+    <div className="nol-dual-range">
+      <div className="track-bg" />
+      <div className="track-fill" style={{ left: `${pct(lo)}%`, width: `${pct(hi) - pct(lo)}%` }} />
+      <input type="range" min={min} max={max} step={step} value={lo} disabled={disabled}
+        onChange={e => setLo(e.target.value)} aria-label="Minimum" />
+      <input type="range" min={min} max={max} step={step} value={hi} disabled={disabled}
+        onChange={e => setHi(e.target.value)} aria-label="Maximum" />
     </div>
   );
 }
@@ -1524,6 +1546,15 @@ function NightFlow({ state, setState, user, gated, goSignup }) {
   const [predVal, setPredVal] = useState(7.5);
   const [finalVal, setFinalVal] = useState(7.5);
   const [note, setNote] = useState("");
+  // Rotten Tomatoes / IMDb / Metacritic only load once your prediction is locked in
+  // (stage moves past "prerate") — so critic scores can never bias your honest guess.
+  const [extRatings, setExtRatings] = useState(null);
+  useEffect(() => {
+    if (!film || night.stage === "prerate") { setExtRatings(null); return; }
+    let on = true;
+    omdb.getRatings(film.n, film.y).then(r => { if (on) setExtRatings(r); }).catch(() => { /* badges just won't show */ });
+    return () => { on = false; };
+  }, [film && film.id, night.stage === "prerate"]);
   if (!film) return null;
 
   const lockCall = () => {
@@ -1636,6 +1667,28 @@ function NightFlow({ state, setState, user, gated, goSignup }) {
             Your call of <span style={{ color: C.amber, fontWeight: 700 }}>{night.pred.toFixed(1)}</span> is on the record.
             Phones down, lights off. We'll be here when the credits roll.
           </p>
+          {extRatings && (extRatings.rt || extRatings.imdb || extRatings.metacritic) && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center", margin: "4px 0 10px" }}>
+              {extRatings.rt && (
+                <span style={{
+                  display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12,
+                  color: "#FF9C6B", border: `1px solid ${C.edge}`, borderRadius: 999, padding: "4px 12px",
+                }}>🍅 {extRatings.rt}</span>
+              )}
+              {extRatings.imdb && (
+                <span style={{
+                  display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12,
+                  color: "#F5C518", border: `1px solid ${C.edge}`, borderRadius: 999, padding: "4px 12px",
+                }}>★ IMDb {extRatings.imdb}</span>
+              )}
+              {extRatings.metacritic && (
+                <span style={{
+                  display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12,
+                  color: C.green, border: `1px solid ${C.edge}`, borderRadius: 999, padding: "4px 12px",
+                }}>Metacritic {extRatings.metacritic}</span>
+              )}
+            </div>
+          )}
           <p style={{ fontFamily: "'Courier Prime', monospace", fontSize: 12, color: C.faint, margin: "0 0 20px" }}>
             — intermission mode: this screen waits as long as it takes —
           </p>
@@ -1872,6 +1925,7 @@ function Picker({ state, setState, user }) {
   const [why, setWhy] = useState("");
   const vetoes = state.vetoesLeft != null ? state.vetoesLeft : 2;
   const [minYr, setMinYr] = useState(1920);
+  const [maxYr, setMaxYr] = useState(2025);
   const [contentRating, setContentRating] = useState("any");
   const [seenMode, setSeenMode] = useState(false);
   const [seenRating, setSeenRating] = useState(7.5);
@@ -1895,17 +1949,6 @@ function Picker({ state, setState, user }) {
     const s = slugify(filmName);
     return communityRatings.find(r => r.slug === s) || null;
   };
-
-  // Fetch Rotten Tomatoes / IMDb / Metacritic the moment a film lands, so the
-  // badges are ready right when you'd want them — no extra tap required.
-  const [extRatings, setExtRatings] = useState(null);
-  useEffect(() => {
-    if (phase !== "landed" || !display) { setExtRatings(null); return; }
-    let on = true;
-    setExtRatings(null);
-    omdb.getRatings(display.n, display.y).then(r => { if (on) setExtRatings(r); }).catch(() => { /* badges just won't show */ });
-    return () => { on = false; };
-  }, [phase, display && display.n]);
 
   useEffect(() => {
     if (!tmdb.enabled()) return;
@@ -1957,7 +2000,7 @@ function Picker({ state, setState, user }) {
       const liveOnly = svcs
         .filter(s => TMDB_PROVIDERS[s])
         .flatMap(s => liveCatalog[`${s}::${contentRating}`] || [])
-        .filter(c => !watchedTitles.has(c.n.toLowerCase()) && c.rt <= maxRt && c.y >= minYr && (mood === "any" || c.mood === mood))
+        .filter(c => !watchedTitles.has(c.n.toLowerCase()) && c.rt <= maxRt && c.y >= minYr && c.y <= maxYr && (mood === "any" || c.mood === mood))
         .filter(c => {
           const lib = state.films.find(f => f.n.toLowerCase() === c.n.toLowerCase());
           return !lib || !openIds.has(lib.id);
@@ -1972,18 +2015,18 @@ function Picker({ state, setState, user }) {
     }
 
     const wl = state.films.filter(f =>
-      f.status === "watchlist" && !openIds.has(f.id) && svcOk(f) && f.rt <= maxRt && f.y >= minYr && (mood === "any" || f.mood === mood));
+      f.status === "watchlist" && !openIds.has(f.id) && svcOk(f) && f.rt <= maxRt && f.y >= minYr && f.y <= maxYr && (mood === "any" || f.mood === mood));
     const TRS = liveTrending || TRENDING;
     const tr = TRS
       .map((t, i) => ({ ...t, rank: i + 1 }))
-      .filter(t => !watchedTitles.has(t.n.toLowerCase()) && svcOk(t) && t.rt <= maxRt && t.y >= minYr && (mood === "any" || t.mood === mood))
+      .filter(t => !watchedTitles.has(t.n.toLowerCase()) && svcOk(t) && t.rt <= maxRt && t.y >= minYr && t.y <= maxYr && (mood === "any" || t.mood === mood))
       .filter(t => {
         const lib = state.films.find(f => f.n.toLowerCase() === t.n.toLowerCase());
         return !lib || !openIds.has(lib.id);
       });
     const liveFilms = svcs.filter(s => TMDB_PROVIDERS[s]).flatMap(s => liveCatalog[`${s}::any`] || []);
     const cat = [...CATALOG, ...liveFilms]
-      .filter(c => !watchedTitles.has(c.n.toLowerCase()) && svcOk(c) && c.rt <= maxRt && c.y >= minYr && (mood === "any" || c.mood === mood))
+      .filter(c => !watchedTitles.has(c.n.toLowerCase()) && svcOk(c) && c.rt <= maxRt && c.y >= minYr && c.y <= maxYr && (mood === "any" || c.mood === mood))
       .filter(c => {
         const lib = state.films.find(f => f.n.toLowerCase() === c.n.toLowerCase());
         return !lib || !openIds.has(lib.id);
@@ -1991,7 +2034,7 @@ function Picker({ state, setState, user }) {
     if (source === "rewatch") {
       return state.films.filter(f =>
         f.status === "watched" && !openIds.has(f.id) && svcOk(f) &&
-        f.rt <= maxRt && f.y >= minYr && (mood === "any" || f.mood === mood));
+        f.rt <= maxRt && f.y >= minYr && f.y <= maxYr && (mood === "any" || f.mood === mood));
     }
     if (source === "watchlist") return wl;
     if (source === "trending") return tr;
@@ -2215,10 +2258,10 @@ function Picker({ state, setState, user }) {
         </div>
         <div style={{ flex: "1 1 140px", minWidth: 130 }}>
           <div style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, marginBottom: 8 }}>
-            From year — <span style={{ color: C.text }}>{minYr <= 1920 ? "any era" : minYr + "+"}</span>
+            Years — <span style={{ color: C.text }}>{minYr <= 1920 && maxYr >= 2025 ? "any era" : `${minYr}–${maxYr}`}</span>
           </div>
-          <input type="range" className="nol-range" min="1920" max="2025" step="5" value={minYr}
-            onChange={e => setMinYr(Number(e.target.value))} disabled={locked} style={{ width: "100%" }} />
+          <DualRangeSlider min={1920} max={2025} step={5} lo={minYr} hi={maxYr} disabled={locked}
+            onChange={([lo, hi]) => { setMinYr(lo); setMaxYr(hi); }} />
         </div>
         <div style={{ flex: "0 1 108px", minWidth: 100 }}>
           <div style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, marginBottom: 8 }}>Rating</div>
@@ -2279,24 +2322,6 @@ function Picker({ state, setState, user }) {
                       <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 14, color: C.amber }}>{Number(cr.avg_rating).toFixed(1)}</span>
                       Nerdmunity ({cr.rating_count})
                     </span>
-                  )}
-                  {extRatings && extRatings.rt && (
-                    <span style={{
-                      display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12,
-                      color: "#FF9C6B", border: `1px solid ${C.edge}`, borderRadius: 999, padding: "4px 12px",
-                    }}>🍅 {extRatings.rt}</span>
-                  )}
-                  {extRatings && extRatings.imdb && (
-                    <span style={{
-                      display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12,
-                      color: "#F5C518", border: `1px solid ${C.edge}`, borderRadius: 999, padding: "4px 12px",
-                    }}>★ IMDb {extRatings.imdb}</span>
-                  )}
-                  {extRatings && extRatings.metacritic && (
-                    <span style={{
-                      display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12,
-                      color: C.green, border: `1px solid ${C.edge}`, borderRadius: 999, padding: "4px 12px",
-                    }}>Metacritic {extRatings.metacritic}</span>
                   )}
                 </div>
               );
