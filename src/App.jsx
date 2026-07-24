@@ -370,10 +370,11 @@ const tmdb = {
   },
   // Pulls a large, currently-streaming slice for one service via TMDB's discover
   // endpoint (filtered by watch provider), cached per-service for the day.
-  async discoverByService(svcName) {
+  async discoverByService(svcName, certification) {
     const pid = TMDB_PROVIDERS[svcName];
     if (!pid) return [];
-    const cacheKey = "nol-tmdb-discover-v2-" + svcName;
+    const cert = certification && certification !== "any" ? certification : null;
+    const cacheKey = "nol-tmdb-discover-v2-" + svcName + (cert ? "-" + cert : "");
     try {
       const cached = await store.get(cacheKey);
       if (cached) {
@@ -385,6 +386,8 @@ const tmdb = {
     const pageUrl = (page) => tmdbProxy("/discover/movie", {
       watch_region: "US", with_watch_providers: String(pid), with_watch_monetization_types: "flatrate",
       sort_by: "popularity.desc", include_adult: "false", page: String(page),
+      // TMDB filters certification for us server-side — no per-title lookups needed.
+      ...(cert ? { certification_country: "US", certification: cert } : {}),
     });
     let all = [];
     let totalPages = 1;
@@ -996,7 +999,13 @@ function Marquee() {
           Stop scrolling<br />Start watching
         </p>
         <p style={{
-          margin: "12px 0 0", color: C.amberSoft, fontSize: 14, fontStyle: "italic",
+          margin: "14px 0 0", color: C.text, fontSize: 17, fontWeight: 700,
+          textAlign: "center", maxWidth: 340, marginLeft: "auto", marginRight: "auto", lineHeight: 1.4,
+        }}>
+          The fastest way to decide what to watch tonight.
+        </p>
+        <p style={{
+          margin: "8px 0 0", color: C.amberSoft, fontSize: 14, fontStyle: "italic",
           textAlign: "center", maxWidth: 320, marginLeft: "auto", marginRight: "auto", lineHeight: 1.5,
         }}>
           We pick your movie. You call your rating. Nerdmunity settles the debate.
@@ -1827,13 +1836,29 @@ function Picker({ state, setState, user }) {
   const [why, setWhy] = useState("");
   const vetoes = state.vetoesLeft != null ? state.vetoesLeft : 2;
   const [minYr, setMinYr] = useState(1920);
+  const [contentRating, setContentRating] = useState("any");
   const [seenMode, setSeenMode] = useState(false);
   const [seenRating, setSeenRating] = useState(7.5);
   const [seenNote, setSeenNote] = useState("");
   const [liveTrending, setLiveTrending] = useState(null);
-  const [liveCatalog, setLiveCatalog] = useState({});   // { Netflix: [...], Prime: [...] }
+  const [liveCatalog, setLiveCatalog] = useState({});   // { "Netflix::any": [...], "Netflix::PG-13": [...] }
   const [loadingSvcs, setLoadingSvcs] = useState({});
+  const [communityRatings, setCommunityRatings] = useState(null);
   const timer = useRef(null);
+
+  // Loaded once — lets the landed card show "Nerdmunity rates it 8.2" without
+  // any extra clicks or navigation, straight from the same data Nerdmunity uses.
+  useEffect(() => {
+    if (!cloud.enabled()) return;
+    let on = true;
+    cloud.loadCommunityRatings(500).then(rows => { if (on && rows) setCommunityRatings(rows); }).catch(() => { /* quiet */ });
+    return () => { on = false; };
+  }, []);
+  const communityFor = (filmName) => {
+    if (!communityRatings) return null;
+    const s = slugify(filmName);
+    return communityRatings.find(r => r.slug === s) || null;
+  };
 
   useEffect(() => {
     if (!tmdb.enabled()) return;
@@ -1844,24 +1869,29 @@ function Picker({ state, setState, user }) {
 
   // Background-fetch each selected service's live streaming catalog from TMDB,
   // one service at a time so we're not firing a burst of requests at once.
+  // Keyed by service+rating so switching the content rating filter re-fetches
+  // the correctly-filtered list instead of reusing an unrelated cache.
   useEffect(() => {
     if (!tmdb.enabled()) return;
     let on = true;
     const svcs = state.services || [];
-    const next = svcs.find(s => TMDB_PROVIDERS[s] && !liveCatalog[s] && !loadingSvcs[s]);
+    const keyFor = (s) => `${s}::${contentRating}`;
+    const next = svcs.find(s => TMDB_PROVIDERS[s] && !liveCatalog[keyFor(s)] && !loadingSvcs[keyFor(s)]);
     if (!next) return;
-    setLoadingSvcs(p => ({ ...p, [next]: true }));
-    tmdb.discoverByService(next).then(items => {
+    const key = keyFor(next);
+    setLoadingSvcs(p => ({ ...p, [key]: true }));
+    tmdb.discoverByService(next, contentRating).then(items => {
       if (!on) return;
-      setLiveCatalog(p => ({ ...p, [next]: items }));
+      setLiveCatalog(p => ({ ...p, [key]: items }));
     }).catch(() => { /* leave unfetched, curated catalog still covers it */ }).finally(() => {
-      if (on) setLoadingSvcs(p => ({ ...p, [next]: false }));
+      if (on) setLoadingSvcs(p => ({ ...p, [key]: false }));
     });
     return () => { on = false; };
-  }, [state.services.join("|"), Object.keys(liveCatalog).join("|")]);
+  }, [state.services.join("|"), contentRating, Object.keys(liveCatalog).join("|")]);
 
   const services = state.services || [...ALL_SERVICES];
   const profile = tasteProfile(state.films);
+  const ratingFiltered = contentRating !== "any";
 
   // Single source of truth for what's eligible, rebuilt fresh on every use so
   // a pick can never land outside your selected services or filters.
@@ -1871,6 +1901,29 @@ function Picker({ state, setState, user }) {
     const openIds = new Set(state.predictions.filter(p => p.actual == null).map(p => p.filmId));
     const libTitles = new Set(state.films.map(f => f.n.toLowerCase()));
     const watchedTitles = new Set(state.films.filter(f => f.status === "watched").map(f => f.n.toLowerCase()));
+
+    // A content rating is selected: only the live per-service catalog carries
+    // verified certification data, so that's the only source used — trending,
+    // watchlist, and the curated catalog sit out this spin rather than risk an
+    // unverified rating slipping through.
+    if (ratingFiltered) {
+      const liveOnly = svcs
+        .filter(s => TMDB_PROVIDERS[s])
+        .flatMap(s => liveCatalog[`${s}::${contentRating}`] || [])
+        .filter(c => !watchedTitles.has(c.n.toLowerCase()) && c.rt <= maxRt && c.y >= minYr && (mood === "any" || c.mood === mood))
+        .filter(c => {
+          const lib = state.films.find(f => f.n.toLowerCase() === c.n.toLowerCase());
+          return !lib || !openIds.has(lib.id);
+        });
+      const seenR = new Set();
+      return liveOnly.filter(f => {
+        const k = f.n.toLowerCase();
+        if (seenR.has(k)) return false;
+        seenR.add(k);
+        return true;
+      });
+    }
+
     const wl = state.films.filter(f =>
       f.status === "watchlist" && !openIds.has(f.id) && svcOk(f) && f.rt <= maxRt && f.y >= minYr && (mood === "any" || f.mood === mood));
     const TRS = liveTrending || TRENDING;
@@ -1881,7 +1934,7 @@ function Picker({ state, setState, user }) {
         const lib = state.films.find(f => f.n.toLowerCase() === t.n.toLowerCase());
         return !lib || !openIds.has(lib.id);
       });
-    const liveFilms = Object.values(liveCatalog).flat();
+    const liveFilms = svcs.filter(s => TMDB_PROVIDERS[s]).flatMap(s => liveCatalog[`${s}::any`] || []);
     const cat = [...CATALOG, ...liveFilms]
       .filter(c => !watchedTitles.has(c.n.toLowerCase()) && svcOk(c) && c.rt <= maxRt && c.y >= minYr && (mood === "any" || c.mood === mood))
       .filter(c => {
@@ -2120,11 +2173,28 @@ function Picker({ state, setState, user }) {
           <input type="range" className="nol-range" min="1920" max="2025" step="5" value={minYr}
             onChange={e => setMinYr(Number(e.target.value))} disabled={locked} style={{ width: "100%" }} />
         </div>
+        <div style={{ flex: 1, minWidth: 170 }}>
+          <div style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, marginBottom: 8 }}>Movie rating</div>
+          <select className="nol-input" value={contentRating} onChange={e => setContentRating(e.target.value)} disabled={locked} style={{ cursor: "pointer" }}>
+            <option value="any">Any rating</option>
+            <option value="G">G</option>
+            <option value="PG">PG</option>
+            <option value="PG-13">PG-13</option>
+            <option value="R">R</option>
+            <option value="NC-17">NC-17</option>
+          </select>
+        </div>
         <div style={{ fontSize: 12, color: C.faint, paddingBottom: 10 }}>
           {pool.length} film{pool.length === 1 ? "" : "s"} in the pool
           {Object.values(loadingSvcs).some(Boolean) && <span style={{ color: C.amberSoft }}> · loading more…</span>}
         </div>
       </div>
+      {ratingFiltered && (
+        <p style={{ color: C.faint, fontSize: 11, margin: "-14px 0 16px", lineHeight: 1.5 }}>
+          With a movie rating selected, picks come only from your services' live streaming catalog —
+          the one source with verified ratings. Trending and the built-in catalog sit out this spin.
+        </p>
+      )}
 
       <div style={{
         position: "relative", background: C.panel, borderRadius: 12, marginBottom: 18,
@@ -2153,6 +2223,19 @@ function Picker({ state, setState, user }) {
                 color: "#14120A", background: C.amber, borderRadius: 999, padding: "5px 16px",
               }}>{why}</div>
             )}
+            {phase === "landed" && (() => {
+              const cr = communityFor(display.n);
+              if (!cr) return null;
+              return (
+                <div style={{
+                  display: "inline-flex", alignItems: "center", gap: 6, marginTop: 10, marginLeft: 8,
+                  fontSize: 13, color: C.amberSoft, border: `1px solid ${C.edge}`, borderRadius: 999, padding: "5px 14px",
+                }}>
+                  <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 15, color: C.amber }}>{Number(cr.avg_rating).toFixed(1)}</span>
+                  Nerdmunity rates it · {cr.rating_count} rating{cr.rating_count === 1 ? "" : "s"}
+                </div>
+              );
+            })()}
             {phase === "landed" && (
               <>
                 <p style={{
