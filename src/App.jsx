@@ -60,12 +60,22 @@ const cloud = (() => {
     },
     onAuthChange(cb) {
       const c = ready(); if (!c) return () => {};
-      const { data } = c.auth.onAuthStateChange((_e, session) => cb(session ? session.user : null));
+      const { data } = c.auth.onAuthStateChange((event, session) => cb(session ? session.user : null, event));
       return () => { try { data.subscription.unsubscribe(); } catch { /* ignore */ } };
     },
     signUp(email, password) { return ready().auth.signUp({ email, password }); },
     signIn(email, password) { return ready().auth.signInWithPassword({ email, password }); },
     signOut() { return ready().auth.signOut(); },
+    // Sends a reset link to the given email. The link brings the user back here
+    // with a recovery session — handled by the PASSWORD_RECOVERY event above.
+    requestPasswordReset(email) {
+      const c = ready(); if (!c) return Promise.resolve({ error: { message: "Not available" } });
+      return c.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
+    },
+    updatePassword(newPassword) {
+      const c = ready(); if (!c) return Promise.resolve({ error: { message: "Not available" } });
+      return c.auth.updateUser({ password: newPassword });
+    },
     async loadState(userId) {
       const c = ready(); if (!c) return null;
       try {
@@ -485,6 +495,7 @@ const SEED = {
   handle: "",
   vetoesLeft: 2,
   notifSeen: { trending: [], svc: {} },
+  nightLog: [],
   nextId: 13,
 };
 
@@ -682,7 +693,8 @@ input[type=range].nol-range::-moz-range-thumb { width: 18px; height: 18px; borde
 .nol-dual-range { position: relative; height: 22px; display: flex; align-items: center; }
 .nol-dual-range .track-bg { position: absolute; left: 0; right: 0; height: 4px; border-radius: 2px; background: ${C.edge}; }
 .nol-dual-range .track-fill { position: absolute; height: 4px; border-radius: 2px; background: ${C.amber}; }
-.nol-dual-range input[type=range] { position: absolute; left: 0; right: 0; width: 100%; margin: 0; background: transparent; pointer-events: none; -webkit-appearance: none; appearance: none; height: 22px; }
+.nol-dual-range input[type=range] { position: absolute; left: 0; right: 0; width: 100%; margin: 0; background: transparent; pointer-events: none; -webkit-appearance: none; appearance: none; height: 22px; touch-action: none; }
+.nol-dual-range input[type=range]:active, .nol-dual-range input[type=range]:focus { z-index: 3; }
 .nol-dual-range input[type=range]::-webkit-slider-runnable-track { background: transparent; height: 22px; }
 .nol-dual-range input[type=range]::-moz-range-track { background: transparent; height: 22px; }
 .nol-dual-range input[type=range]::-webkit-slider-thumb { pointer-events: auto; -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: ${C.amber}; border: 2px solid #14120A; box-shadow: 0 0 8px rgba(255,182,39,0.5); cursor: pointer; margin-top: 0; }
@@ -737,6 +749,26 @@ function calStats(state) {
   const avgGap = done.length ? done.reduce((s, p) => s + Math.abs(p.pred - p.actual), 0) / done.length : null;
   const calibration = avgGap == null ? null : Math.max(0, Math.round(100 - avgGap * 15));
   return { done, avgGap, calibration };
+}
+
+// Consecutive calendar days (ending today or yesterday — a night is still "on
+// streak" until you've fully skipped a day) with at least one completed night.
+function computeStreak(nightLog) {
+  const days = new Set(nightLog || []);
+  if (days.size === 0) return 0;
+  const toISO = (d) => d.toISOString().slice(0, 10);
+  const today = new Date();
+  let cursor = new Date(today);
+  if (!days.has(toISO(cursor))) {
+    cursor.setDate(cursor.getDate() - 1); // allow "yesterday" to still count as an active streak
+    if (!days.has(toISO(cursor))) return 0;
+  }
+  let streak = 0;
+  while (days.has(toISO(cursor))) {
+    streak += 1;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  return streak;
 }
 
 function tasteProfile(films) {
@@ -1335,6 +1367,7 @@ function Lobby({ film, handle, saveHandle, user, goAccount, setFilmPoster, onRat
   };
 
   const needSignIn = cloud.enabled() && !user;
+  const isAdmin = !!(ADMIN_EMAIL && user && user.email && user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase());
   const all = msgs || [];
   const rated = all.filter(m => m.r != null);
   const avg = rated.length ? rated.reduce((s, m) => s + Number(m.r), 0) / rated.length : null;
@@ -1393,12 +1426,16 @@ function Lobby({ film, handle, saveHandle, user, goAccount, setFilmPoster, onRat
       );
     }
     const owned = isMine(m);
+    const canDelete = owned || isAdmin;
     return (
       <div style={{ display: "flex", gap: 9 }}>
         <Avatar name={m.u} size={isReply ? 24 : 28} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
             <span style={{ fontWeight: 700, fontSize: 13, color: C.text }}>{m.u}</span>
+            {isAdmin && !owned && (
+              <span style={{ fontSize: 9, letterSpacing: "0.1em", color: C.faint, border: `1px solid ${C.edge}`, borderRadius: 4, padding: "1px 5px" }}>MOD VIEW</span>
+            )}
             {m.r != null && (
               <span style={{
                 fontFamily: "'Bebas Neue', sans-serif", fontSize: 13, color: "#14120A",
@@ -1411,12 +1448,12 @@ function Lobby({ film, handle, saveHandle, user, goAccount, setFilmPoster, onRat
                 <span className="nol-danger-link" style={{ fontSize: 12 }} onClick={() => setReplyTo(m)}>Reply</span>
               )}
               {owned && confirmDeleteId !== m.id && (
-                <>
-                  <span className="nol-danger-link" style={{ fontSize: 12 }} onClick={() => startEdit(m)}>Edit</span>
-                  <span className="nol-danger-link" style={{ fontSize: 12 }} onClick={() => setConfirmDeleteId(m.id)}>Delete</span>
-                </>
+                <span className="nol-danger-link" style={{ fontSize: 12 }} onClick={() => startEdit(m)}>Edit</span>
               )}
-              {owned && confirmDeleteId === m.id && (
+              {canDelete && confirmDeleteId !== m.id && (
+                <span className="nol-danger-link" style={{ fontSize: 12 }} onClick={() => setConfirmDeleteId(m.id)}>Delete</span>
+              )}
+              {canDelete && confirmDeleteId === m.id && (
                 <>
                   <span style={{ fontSize: 12, color: C.red }} onClick={() => doDelete(m)} className="nol-danger-link">Confirm delete</span>
                   <span className="nol-danger-link" style={{ fontSize: 12 }} onClick={() => setConfirmDeleteId(null)}>Cancel</span>
@@ -1576,11 +1613,13 @@ function NightFlow({ state, setState, user, gated, goSignup }) {
       ts: Date.now(),
     }, user);
     setState(s => {
+      const today = new Date().toISOString().slice(0, 10);
       const base = {
         ...s,
         predictions: s.predictions.map(q => q.filmId === film.id && q.actual == null ? { ...q, actual: finalVal } : q),
         films: s.films.map(f => f.id === film.id ? { ...f, status: "watched", rating: finalVal, note: trimmed } : f),
         spins: { ...s.spins, honored: s.spins.honored + 1 },
+        nightLog: (s.nightLog || []).includes(today) ? (s.nightLog || []) : [...(s.nightLog || []), today].slice(-400),
       };
       if (gated) {
         return { ...base, night: { ...s.night, stage: "done", actual: finalVal, listPosition: null } };
@@ -1860,6 +1899,7 @@ function PatronBoard({ user, handle, goAccount }) {
   };
 
   const remove = async (id) => { await cloud.deleteChat(id); };
+  const isAdmin = !!(ADMIN_EMAIL && user && user.email && user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase());
 
   if (!cloud.enabled()) return null;
 
@@ -1888,8 +1928,10 @@ function PatronBoard({ user, handle, goAccount }) {
                   <span style={{ fontSize: 10, color: C.faint }}>
                     {m.created_at ? new Date(m.created_at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }) : ""}
                   </span>
-                  {user && m.user_id === user.id && (
-                    <span className="nol-danger-link" style={{ fontSize: 10, marginLeft: "auto" }} onClick={() => remove(m.id)}>delete</span>
+                  {user && (m.user_id === user.id || isAdmin) && (
+                    <span className="nol-danger-link" style={{ fontSize: 10, marginLeft: "auto" }} onClick={() => remove(m.id)}>
+                      {m.user_id === user.id ? "delete" : "delete (mod)"}
+                    </span>
                   )}
                 </div>
                 <div style={{ fontSize: 13.5, color: C.muted, lineHeight: 1.45, marginTop: 1, wordBreak: "break-word" }}>{m.body}</div>
@@ -2385,6 +2427,7 @@ function Picker({ state, setState, user }) {
 
       <div className="nol-stat-row" style={{ display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap", marginTop: 26 }}>
         <Stat label="Nights" value={state.spins.committed} />
+        <Stat label="Streak" value={`${computeStreak(state.nightLog)}🔥`} accent={C.red} />
         <Stat label="Honor" value={honor == null ? "—" : `${honor}%`} accent={C.amber} />
         <Stat label="Calibration" value={calibration == null ? "—" : `${calibration}%`} accent={C.amber} />
         <Stat label="Taste lane" value={MOODS[profile.bestMood].split(" ")[0]} accent={C.green} />
@@ -3058,6 +3101,59 @@ function AdminPage() {
 }
 
 // ---------------- Account page ----------------
+function ResetPasswordPage({ onDone }) {
+  const [pw, setPw] = useState("");
+  const [pw2, setPw2] = useState("");
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+
+  const submit = async () => {
+    if (pw.length < 8) { setMsg("Password needs to be at least 8 characters."); return; }
+    if (pw !== pw2) { setMsg("Passwords don't match."); return; }
+    setBusy(true); setMsg("");
+    try {
+      const { error } = await cloud.updatePassword(pw);
+      if (error) setMsg(error.message);
+      else setDone(true);
+    } catch { setMsg("Something went wrong. Try again."); }
+    setBusy(false);
+  };
+
+  if (done) {
+    return (
+      <div className="nol-fade" style={{ maxWidth: 480, margin: "0 auto", padding: "0 16px 40px" }}>
+        <SectionHead kicker="Accounts" title="Password updated" sub="You're all set." />
+        <div style={{ textAlign: "center" }}>
+          <button className="nol-btn big" onClick={onDone}>Continue to NerdOutLoud</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="nol-fade" style={{ maxWidth: 480, margin: "0 auto", padding: "0 16px 40px" }}>
+      <SectionHead kicker="Accounts" title="Set a new password" sub="Choose something you haven't used here before." />
+      <div style={{
+        background: C.panel, border: `1px solid ${C.edge}`, borderRadius: 10, padding: 20,
+        display: "flex", flexDirection: "column", gap: 12, boxShadow: "0 4px 18px rgba(0,0,0,0.3)",
+      }}>
+        <label htmlFor="nol-newpw" style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, marginBottom: -6 }}>New password</label>
+        <input className="nol-input" type="password" id="nol-newpw" name="new-password"
+          placeholder="8+ characters" value={pw} onChange={e => setPw(e.target.value)} autoComplete="new-password" />
+        <label htmlFor="nol-newpw2" style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, marginBottom: -6 }}>Confirm new password</label>
+        <input className="nol-input" type="password" id="nol-newpw2" name="new-password"
+          placeholder="Type it again" value={pw2} onChange={e => setPw2(e.target.value)} autoComplete="new-password"
+          onKeyDown={e => { if (e.key === "Enter") submit(); }} />
+        {msg && <p style={{ color: C.amberSoft, fontSize: 13, margin: 0, lineHeight: 1.5 }}>{msg}</p>}
+        <button className="nol-btn" onClick={submit} disabled={busy || !pw || !pw2}>
+          {busy ? "Saving…" : "Save new password"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function AccountPage({ user, onDone, initialMode, handle, saveHandle }) {
   const [mode, setMode] = useState(initialMode === "signup" ? "signup" : "signin");
   const [uname, setUname] = useState("");
@@ -3149,6 +3245,42 @@ function AccountPage({ user, onDone, initialMode, handle, saveHandle }) {
     setBusy(false);
   };
 
+  const sendReset = async () => {
+    if (!email.trim()) return;
+    setBusy(true); setMsg("");
+    try {
+      const { error } = await cloud.requestPasswordReset(email.trim());
+      setMsg(error ? error.message : "Check your inbox — we sent a link to reset your password.");
+    } catch { setMsg("Something went wrong. Try again."); }
+    setBusy(false);
+  };
+
+  if (mode === "forgot") {
+    return (
+      <div className="nol-fade" style={{ maxWidth: 480, margin: "0 auto", padding: "0 16px 40px" }}>
+        <SectionHead kicker="Accounts" title="Reset your password"
+          sub="Enter your email and we'll send you a link to set a new one." />
+        <div style={{
+          background: C.panel, border: `1px solid ${C.edge}`, borderRadius: 10, padding: 20,
+          display: "flex", flexDirection: "column", gap: 12, boxShadow: "0 4px 18px rgba(0,0,0,0.3)",
+        }}>
+          <label htmlFor="nol-forgot-email" style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, marginBottom: -6 }}>Email</label>
+          <input className="nol-input" type="email" id="nol-forgot-email" name="email" inputMode="email"
+            placeholder="you@example.com" value={email}
+            onChange={e => setEmail(e.target.value)} autoComplete="email" autoCapitalize="none" spellCheck={false}
+            onKeyDown={e => { if (e.key === "Enter") sendReset(); }} />
+          {msg && <p style={{ color: C.amberSoft, fontSize: 13, margin: 0, lineHeight: 1.5 }}>{msg}</p>}
+          <button className="nol-btn" onClick={sendReset} disabled={busy || !email.trim()}>
+            {busy ? "Sending…" : "Send reset link"}
+          </button>
+          <span className="nol-danger-link" style={{ textAlign: "center", fontSize: 13 }} onClick={() => { setMode("signin"); setMsg(""); }}>
+            Back to sign in
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="nol-fade" style={{ maxWidth: 480, margin: "0 auto", padding: "0 16px 40px" }}>
       <SectionHead kicker="Accounts" title={mode === "signin" ? "Sign in" : "Create your account"}
@@ -3179,6 +3311,10 @@ function AccountPage({ user, onDone, initialMode, handle, saveHandle }) {
           onChange={e => setPw(e.target.value)}
           autoComplete={mode === "signin" ? "current-password" : "new-password"}
           onKeyDown={e => { if (e.key === "Enter") go(); }} />
+        {mode === "signin" && (
+          <span className="nol-danger-link" style={{ fontSize: 12, textAlign: "right" }}
+            onClick={() => { setMode("forgot"); setMsg(""); }}>Forgot password?</span>
+        )}
         <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: C.muted, cursor: "pointer", userSelect: "none" }}>
           <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)}
             style={{ width: 16, height: 16, accentColor: "#FFB627", cursor: "pointer" }} />
@@ -3317,7 +3453,7 @@ export default function NerdOutLoud() {
       let parsed = null;
       if (raw) { try { parsed = JSON.parse(raw); } catch { parsed = null; } }
       setState(parsed
-        ? { night: null, services: [...ALL_SERVICES], handle: "", vetoesLeft: 2, notifications: [], notifSeen: { trending: [], svc: {} }, ...parsed }
+        ? { night: null, services: [...ALL_SERVICES], handle: "", vetoesLeft: 2, notifications: [], notifSeen: { trending: [], svc: {} }, nightLog: [], ...parsed }
         : SEED);
       loaded.current = true;
     })();
@@ -3327,7 +3463,10 @@ export default function NerdOutLoud() {
   useEffect(() => {
     if (!cloud.enabled()) return;
     cloud.getUser().then(u => setUser(u));
-    const off = cloud.onAuthChange(u => setUser(u));
+    const off = cloud.onAuthChange((u, event) => {
+      setUser(u);
+      if (event === "PASSWORD_RECOVERY") setView("reset-password");
+    });
     return off;
   }, []);
 
@@ -3515,6 +3654,7 @@ export default function NerdOutLoud() {
           ? <GatePage what="your watchlist, ranking, and the every-movie search" onSignup={goSignup} onSignin={goSignin} />
           : <Library state={state} setState={setState} goToFilm={(id) => { setJumpFilmId(id); setView("board"); }} />)}
         {view === "account" && <AccountPage key={accountMode} user={user} initialMode={accountMode} handle={state.handle} saveHandle={saveHandle} onDone={() => setView("home")} />}
+        {view === "reset-password" && <ResetPasswordPage onDone={() => setView("home")} />}
         {view === "admin" && isAdmin && <AdminPage />}
         {view === "legal" && <LegalPage key={legalTab} initialTab={legalTab} />}
       </main>
