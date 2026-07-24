@@ -425,6 +425,41 @@ const tmdb = {
   },
 };
 
+// ---------- OMDb: Rotten Tomatoes, IMDb, and Metacritic scores ----------
+// Cached per title+year for the day, same pattern as everything else here.
+const omdb = {
+  async getRatings(title, year) {
+    const cacheKey = "nol-omdb-" + slugify(title) + "-" + (year || "");
+    try {
+      const cached = await store.get(cacheKey);
+      if (cached) {
+        const { day, ratings } = JSON.parse(cached);
+        if (day === new Date().toDateString()) return ratings;
+      }
+    } catch { /* refetch */ }
+    let ratings = null;
+    try {
+      const qs = new URLSearchParams({ t: title });
+      if (year) qs.set("y", String(year));
+      const r = await fetch(`/api/omdb?${qs.toString()}`);
+      if (r.ok) {
+        const j = await r.json();
+        if (j && j.Response !== "False") {
+          const out = {};
+          (j.Ratings || []).forEach(rt => {
+            if (rt.Source === "Rotten Tomatoes") out.rt = rt.Value; // e.g. "94%"
+            if (rt.Source === "Internet Movie Database") out.imdb = rt.Value; // e.g. "8.1/10"
+            if (rt.Source === "Metacritic") out.metacritic = rt.Value; // e.g. "78/100"
+          });
+          ratings = Object.keys(out).length ? out : null;
+        }
+      }
+    } catch { /* leave null, badge just won't show */ }
+    try { await store.set(cacheKey, JSON.stringify({ day: new Date().toDateString(), ratings })); } catch { /* ignore */ }
+    return ratings;
+  },
+};
+
 const ALL_SERVICES = ["Netflix", "Prime", "Max", "Hulu", "Disney+", "Tubi", "Other"];
 
 const SEED = {
@@ -449,6 +484,7 @@ const SEED = {
   services: [...ALL_SERVICES],
   handle: "",
   vetoesLeft: 2,
+  notifSeen: { trending: [], svc: {} },
   nextId: 13,
 };
 
@@ -1860,6 +1896,17 @@ function Picker({ state, setState, user }) {
     return communityRatings.find(r => r.slug === s) || null;
   };
 
+  // Fetch Rotten Tomatoes / IMDb / Metacritic the moment a film lands, so the
+  // badges are ready right when you'd want them — no extra tap required.
+  const [extRatings, setExtRatings] = useState(null);
+  useEffect(() => {
+    if (phase !== "landed" || !display) { setExtRatings(null); return; }
+    let on = true;
+    setExtRatings(null);
+    omdb.getRatings(display.n, display.y).then(r => { if (on) setExtRatings(r); }).catch(() => { /* badges just won't show */ });
+    return () => { on = false; };
+  }, [phase, display && display.n]);
+
   useEffect(() => {
     if (!tmdb.enabled()) return;
     let on = true;
@@ -2183,18 +2230,15 @@ function Picker({ state, setState, user }) {
             <option value="R">R</option>
             <option value="NC-17">NC-17</option>
           </select>
+          {ratingFiltered && (
+            <div style={{ fontSize: 10, color: C.faint, marginTop: 4 }}>Live streaming catalog only</div>
+          )}
         </div>
         <div style={{ fontSize: 12, color: C.faint, paddingBottom: 10 }}>
           {pool.length} film{pool.length === 1 ? "" : "s"} in the pool
           {Object.values(loadingSvcs).some(Boolean) && <span style={{ color: C.amberSoft }}> · loading more…</span>}
         </div>
       </div>
-      {ratingFiltered && (
-        <p style={{ color: C.faint, fontSize: 11, margin: "-14px 0 16px", lineHeight: 1.5 }}>
-          With a movie rating selected, picks come only from your services' live streaming catalog —
-          the one source with verified ratings. Trending and the built-in catalog sit out this spin.
-        </p>
-      )}
 
       <div style={{
         position: "relative", background: C.panel, borderRadius: 12, marginBottom: 18,
@@ -2217,22 +2261,43 @@ function Picker({ state, setState, user }) {
             <div style={{ color: C.muted, fontSize: 14, marginTop: 8 }}>
               {display.y} · {display.rt} min · dir. {display.d} · streaming on <span style={{ color: C.text }}>{display.svc}</span>
             </div>
-            {why && phase === "landed" && (
-              <div style={{
-                display: "inline-block", marginTop: 12, fontSize: 13, fontWeight: 700,
-                color: "#14120A", background: C.amber, borderRadius: 999, padding: "5px 16px",
-              }}>{why}</div>
-            )}
             {phase === "landed" && (() => {
               const cr = communityFor(display.n);
-              if (!cr) return null;
               return (
-                <div style={{
-                  display: "inline-flex", alignItems: "center", gap: 6, marginTop: 10, marginLeft: 8,
-                  fontSize: 13, color: C.amberSoft, border: `1px solid ${C.edge}`, borderRadius: 999, padding: "5px 14px",
-                }}>
-                  <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 15, color: C.amber }}>{Number(cr.avg_rating).toFixed(1)}</span>
-                  Nerdmunity rates it · {cr.rating_count} rating{cr.rating_count === 1 ? "" : "s"}
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center", marginTop: 12 }}>
+                  {why && (
+                    <span style={{
+                      fontSize: 13, fontWeight: 700, color: "#14120A", background: C.amber,
+                      borderRadius: 999, padding: "5px 14px",
+                    }}>{why}</span>
+                  )}
+                  {cr && (
+                    <span style={{
+                      display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12,
+                      color: C.amberSoft, border: `1px solid ${C.edge}`, borderRadius: 999, padding: "4px 12px",
+                    }}>
+                      <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 14, color: C.amber }}>{Number(cr.avg_rating).toFixed(1)}</span>
+                      Nerdmunity ({cr.rating_count})
+                    </span>
+                  )}
+                  {extRatings && extRatings.rt && (
+                    <span style={{
+                      display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12,
+                      color: "#FF9C6B", border: `1px solid ${C.edge}`, borderRadius: 999, padding: "4px 12px",
+                    }}>🍅 {extRatings.rt}</span>
+                  )}
+                  {extRatings && extRatings.imdb && (
+                    <span style={{
+                      display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12,
+                      color: "#F5C518", border: `1px solid ${C.edge}`, borderRadius: 999, padding: "4px 12px",
+                    }}>★ IMDb {extRatings.imdb}</span>
+                  )}
+                  {extRatings && extRatings.metacritic && (
+                    <span style={{
+                      display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12,
+                      color: C.green, border: `1px solid ${C.edge}`, borderRadius: 999, padding: "4px 12px",
+                    }}>Metacritic {extRatings.metacritic}</span>
+                  )}
                 </div>
               );
             })()}
@@ -3225,7 +3290,7 @@ export default function NerdOutLoud() {
       let parsed = null;
       if (raw) { try { parsed = JSON.parse(raw); } catch { parsed = null; } }
       setState(parsed
-        ? { night: null, services: [...ALL_SERVICES], handle: "", vetoesLeft: 2, notifications: [], ...parsed }
+        ? { night: null, services: [...ALL_SERVICES], handle: "", vetoesLeft: 2, notifications: [], notifSeen: { trending: [], svc: {} }, ...parsed }
         : SEED);
       loaded.current = true;
     })();
@@ -3310,14 +3375,15 @@ export default function NerdOutLoud() {
   }, [user]);
 
   // Once per app load: a quiet digest of new trending titles you haven't been told about yet.
+  // "Seen" tracking lives in synced account state now (not local-only storage), so it can't
+  // get wiped by a storage reset and start re-announcing the same titles as "new" again.
   useEffect(() => {
-    if (!tmdb.enabled()) return;
+    if (!tmdb.enabled() || !state) return;
     (async () => {
       try {
         const items = await tmdb.trending();
         if (!items || !items.length) return;
-        const seenRaw = await store.get("nol-notif-seen-trending");
-        const seen = seenRaw ? JSON.parse(seenRaw) : null;
+        const seen = (state.notifSeen && state.notifSeen.trending) || null;
         const ids = items.map(t => t.tid);
         if (seen) {
           const seenSet = new Set(seen);
@@ -3330,10 +3396,10 @@ export default function NerdOutLoud() {
             });
           }
         }
-        await store.set("nol-notif-seen-trending", JSON.stringify(ids.slice(-200)));
+        setState(s => s ? { ...s, notifSeen: { ...(s.notifSeen || {}), trending: ids.slice(-200) } } : s);
       } catch { /* quiet */ }
     })();
-  }, []);
+  }, [state == null]);
 
   // Once per app load, per selected service: a digest of newly-appeared streaming titles.
   useEffect(() => {
@@ -3346,9 +3412,7 @@ export default function NerdOutLoud() {
         try {
           const items = await tmdb.discoverByService(svc);
           if (!items || !items.length) continue;
-          const seenKey = "nol-notif-seen-" + svc;
-          const seenRaw = await store.get(seenKey);
-          const seen = seenRaw ? JSON.parse(seenRaw) : null;
+          const seen = (state.notifSeen && state.notifSeen.svc && state.notifSeen.svc[svc]) || null;
           const ids = items.map(t => t.tmdbId);
           if (seen) {
             const seenSet = new Set(seen);
@@ -3361,7 +3425,10 @@ export default function NerdOutLoud() {
               });
             }
           }
-          await store.set(seenKey, JSON.stringify(ids.slice(0, 300)));
+          setState(s => s ? {
+            ...s,
+            notifSeen: { ...(s.notifSeen || {}), svc: { ...((s.notifSeen && s.notifSeen.svc) || {}), [svc]: ids.slice(0, 300) } },
+          } : s);
         } catch { /* quiet, move to next service */ }
       }
     })();
