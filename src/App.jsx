@@ -1011,42 +1011,42 @@ function Marquee() {
   return (
     <header style={{
       display: "flex", justifyContent: "center", alignItems: "flex-end", gap: 18,
-      padding: "30px 8px 22px", animation: "nol-flicker 7s infinite", overflow: "hidden",
+      padding: "22px 8px 16px", animation: "nol-flicker 7s infinite", overflow: "hidden",
     }}>
       <PopcornPair uid="left" />
       <div style={{
-        display: "inline-block", padding: "18px 32px 22px", borderRadius: 12,
+        display: "inline-block", padding: "14px 24px 16px", borderRadius: 12, width: "min(92vw, 560px)",
         border: `2px solid ${C.edge}`, background: "rgba(23,27,49,0.55)", textAlign: "center",
         boxShadow: "0 0 60px rgba(255,182,39,0.07), inset 0 0 30px rgba(0,0,0,0.4)",
       }}>
-        <div style={{ display: "flex", justifyContent: "center", gap: 12, marginBottom: 14 }}>
+        <div style={{ display: "flex", justifyContent: "center", gap: 10, marginBottom: 10 }}>
           {[...Array(11)].map((_, i) => (
             <span key={i} className="nol-bulb" style={{ animationDelay: `${(i % 4) * 0.4}s` }} />
           ))}
         </div>
         <h1 style={{
-          fontFamily: "'Bebas Neue', sans-serif", fontSize: "clamp(38px, 8vw, 64px)",
-          letterSpacing: "0.12em", margin: 0, lineHeight: 1, color: C.text,
+          fontFamily: "'Bebas Neue', sans-serif", fontSize: "clamp(28px, 6vw, 46px)",
+          letterSpacing: "0.1em", margin: 0, lineHeight: 1, color: C.text,
           textShadow: `0 0 30px rgba(255,182,39,0.25)`,
         }}>
           NERD<span style={{ color: C.amber, textShadow: `0 0 24px rgba(255,182,39,0.6)` }}>OUT</span>LOUD
         </h1>
-        <p style={{ margin: "10px 0 0", color: C.muted, fontSize: 13, letterSpacing: "0.35em", textTransform: "uppercase", textAlign: "center", lineHeight: 1.7 }}>
-          Stop scrolling<br />Start watching
+        <p style={{ margin: "8px 0 0", color: C.muted, fontSize: 11, letterSpacing: "0.25em", textTransform: "uppercase", textAlign: "center", whiteSpace: "nowrap" }}>
+          Stop scrolling · Start watching
         </p>
         <p style={{
-          margin: "14px 0 0", color: C.text, fontSize: 17, fontWeight: 700,
-          textAlign: "center", maxWidth: 340, marginLeft: "auto", marginRight: "auto", lineHeight: 1.4,
+          margin: "10px 0 0", color: C.text, fontSize: 15, fontWeight: 700,
+          textAlign: "center", maxWidth: 400, marginLeft: "auto", marginRight: "auto", lineHeight: 1.3,
         }}>
           The fastest way to decide what to watch tonight.
         </p>
         <p style={{
-          margin: "8px 0 0", color: C.amberSoft, fontSize: 14, fontStyle: "italic",
-          textAlign: "center", maxWidth: 320, marginLeft: "auto", marginRight: "auto", lineHeight: 1.5,
+          margin: "6px 0 0", color: C.amberSoft, fontSize: 12.5, fontStyle: "italic",
+          textAlign: "center", maxWidth: 380, marginLeft: "auto", marginRight: "auto", lineHeight: 1.4,
         }}>
           We pick your movie. You call your rating. Nerdmunity settles the debate.
         </p>
-        <div style={{ display: "flex", justifyContent: "center", gap: 12, marginTop: 14 }}>
+        <div style={{ display: "flex", justifyContent: "center", gap: 10, marginTop: 10 }}>
           {[...Array(11)].map((_, i) => (
             <span key={i} className="nol-bulb" style={{ animationDelay: `${((i + 2) % 4) * 0.4}s` }} />
           ))}
@@ -2198,32 +2198,32 @@ function Picker({ state, setState, user }) {
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: 18, flexWrap: "wrap", marginBottom: 20, alignItems: "flex-end" }}>
-        <div style={{ flex: 1, minWidth: 170 }}>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 20, alignItems: "flex-end" }}>
+        <div style={{ flex: "1 1 140px", minWidth: 130 }}>
           <div style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, marginBottom: 8 }}>Genre</div>
           <select className="nol-input" value={mood} onChange={e => setMood(e.target.value)} disabled={locked} style={{ cursor: "pointer" }}>
             <option value="any">All genres</option>
             {Object.entries(MOODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
         </div>
-        <div style={{ flex: 1, minWidth: 170 }}>
+        <div style={{ flex: "1 1 140px", minWidth: 130 }}>
           <div style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, marginBottom: 8 }}>
             Max runtime — <span style={{ color: C.text }}>{maxRt} min</span>
           </div>
           <input type="range" className="nol-range" min="85" max="185" step="5" value={maxRt}
             onChange={e => setMaxRt(Number(e.target.value))} disabled={locked} style={{ width: "100%" }} />
         </div>
-        <div style={{ flex: 1, minWidth: 170 }}>
+        <div style={{ flex: "1 1 140px", minWidth: 130 }}>
           <div style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, marginBottom: 8 }}>
             From year — <span style={{ color: C.text }}>{minYr <= 1920 ? "any era" : minYr + "+"}</span>
           </div>
           <input type="range" className="nol-range" min="1920" max="2025" step="5" value={minYr}
             onChange={e => setMinYr(Number(e.target.value))} disabled={locked} style={{ width: "100%" }} />
         </div>
-        <div style={{ flex: 1, minWidth: 170 }}>
-          <div style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, marginBottom: 8 }}>Movie rating</div>
-          <select className="nol-input" value={contentRating} onChange={e => setContentRating(e.target.value)} disabled={locked} style={{ cursor: "pointer" }}>
-            <option value="any">Any rating</option>
+        <div style={{ flex: "0 1 108px", minWidth: 100 }}>
+          <div style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, marginBottom: 8 }}>Rating</div>
+          <select className="nol-input" value={contentRating} onChange={e => setContentRating(e.target.value)} disabled={locked} style={{ cursor: "pointer", padding: "10px 8px" }}>
+            <option value="any">Any</option>
             <option value="G">G</option>
             <option value="PG">PG</option>
             <option value="PG-13">PG-13</option>
@@ -2326,8 +2326,10 @@ function Picker({ state, setState, user }) {
                   </div>
                 ) : (
                   <>
-                    <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", marginTop: 22 }}>
+                    <div style={{ display: "flex", justifyContent: "center", marginTop: 22 }}>
                       <button className="nol-btn big" onClick={commit} disabled={committing}>{committing ? "One moment…" : "Commit — start movie night"}</button>
+                    </div>
+                    <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", marginTop: 14 }}>
                       {vetoes > 0 && <button className="nol-ghost" onClick={veto}>Veto — {vetoes} left</button>}
                       {source !== "rewatch" && <button className="nol-ghost" onClick={() => setSeenMode(true)}>I've seen this</button>}
                     </div>
