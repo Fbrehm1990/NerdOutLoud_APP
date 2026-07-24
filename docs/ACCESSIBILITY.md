@@ -2,7 +2,7 @@
 
 _Effective July 18, 2026_
 
-> DRAFT TEMPLATE — replace [YOUR CONTACT EMAIL].
+> DRAFT TEMPLATE — replace cyber1patriot@gmail.com.
 
 ## 1. Our commitment
 We want NerdOutLoud to be usable by everyone, including people who use assistive technologies such as screen readers, switch devices, or keyboard-only navigation. Accessibility is treated as an ongoing effort, not a one-time checkbox.
@@ -17,7 +17,7 @@ The Service currently includes: respect for your device's reduced-motion prefere
 Areas we are still improving include: full screen-reader testing across all flows; color contrast in a small number of decorative elements; some information conveyed partly by color (such as verdict badges), which we plan to supplement with text in all cases; and user-posted lobby content, which we cannot guarantee is accessible.
 
 ## 5. Feedback and assistance
-If you encounter a barrier that prevents you from using any part of NerdOutLoud, please tell us at [YOUR CONTACT EMAIL]. Include the page or feature, your device and assistive technology if applicable, and what went wrong. We will make reasonable efforts to respond promptly and to fix verified issues or provide the information you needed in an accessible way.
+If you encounter a barrier that prevents you from using any part of NerdOutLoud, please tell us at cyber1patriot@gmail.com. Include the page or feature, your device and assistive technology if applicable, and what went wrong. We will make reasonable efforts to respond promptly and to fix verified issues or provide the information you needed in an accessible way.
 
 ## 6. Compatibility
 The Service is designed for current versions of major browsers (Chrome, Safari, Firefox, Edge) on desktop and mobile. It may not function correctly in outdated browsers.

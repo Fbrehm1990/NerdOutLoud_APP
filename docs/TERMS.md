@@ -2,7 +2,7 @@
 
 _Effective July 18, 2026_
 
-> DRAFT TEMPLATE — have an attorney review before commercial use. Replace [YOUR CONTACT EMAIL] and [YOUR STATE / COUNTRY].
+> DRAFT TEMPLATE — have an attorney review before commercial use. Replace cyber1patriot@gmail.com and West Virginia, USA.
 
 ## 1. Acceptance of these terms
 By using NerdOutLoud (the "Service"), you agree to these Terms of Service. If you do not agree, please do not use the Service.
@@ -14,7 +14,7 @@ NerdOutLoud is an entertainment tool that helps you choose movies, record person
 You must be at least 13 years old to use the Service. If you are under the age of majority where you live, you may use the Service only with the consent of a parent or guardian.
 
 ## 4. Accounts
-You can use the Service without an account. Creating an account adds cross-device sync and the ability to post in film lobbies. If you create an account, you agree to provide accurate information, keep your login credentials confidential, and accept responsibility for all activity that occurs under your account. Accounts are personal to you and may not be shared or transferred. Notify us promptly at [YOUR CONTACT EMAIL] if you suspect unauthorized use of your account. We may suspend or terminate accounts that violate these Terms. You may request deletion of your account and its data at any time by contacting us.
+You can use the Service without an account. Creating an account adds cross-device sync and the ability to post in film lobbies. If you create an account, you agree to provide accurate information, keep your login credentials confidential, and accept responsibility for all activity that occurs under your account. Accounts are personal to you and may not be shared or transferred. Notify us promptly at cyber1patriot@gmail.com if you suspect unauthorized use of your account. We may suspend or terminate accounts that violate these Terms. You may request deletion of your account and its data at any time by contacting us.
 
 ## 5. Your content
 You may post comments, ratings, and a display handle ("User Content"). Content posted to film lobbies is public and displayed with your chosen handle. You keep ownership of your User Content. By posting, you grant us a non-exclusive, worldwide, royalty-free license to store and display that content within the Service so the feature can function. You are solely responsible for what you post.
@@ -41,13 +41,13 @@ TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE OPERATOR OF NERDOUTLOUD WILL NOT BE 
 You agree to indemnify and hold harmless the operator of NerdOutLoud from claims arising out of your User Content or your violation of these Terms.
 
 ## 13. Copyright complaints
-If you believe content in the Service infringes your copyright, contact us at [YOUR CONTACT EMAIL] with sufficient detail to identify the material, and we will review and respond appropriately.
+If you believe content in the Service infringes your copyright, contact us at cyber1patriot@gmail.com with sufficient detail to identify the material, and we will review and respond appropriately.
 
 ## 14. Changes and termination
 We may update these Terms or modify or discontinue the Service at any time. Material changes will be reflected by updating the effective date above. Continued use after changes means you accept the updated Terms. You may stop using the Service at any time, and may request deletion of your account as described in Section 4.
 
 ## 15. Governing law
-These Terms are governed by the laws of [YOUR STATE / COUNTRY], without regard to conflict-of-law rules.
+These Terms are governed by the laws of West Virginia, USA, without regard to conflict-of-law rules.
 
 ## 16. Contact
-Questions about these Terms: [YOUR CONTACT EMAIL].
+Questions about these Terms: cyber1patriot@gmail.com.

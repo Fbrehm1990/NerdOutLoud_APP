@@ -2,7 +2,7 @@
 
 _Effective July 18, 2026_
 
-> DRAFT TEMPLATE — have an attorney review before commercial use. Replace [YOUR CONTACT EMAIL] and [YOUR STATE / COUNTRY].
+> DRAFT TEMPLATE — have an attorney review before commercial use. Replace cyber1patriot@gmail.com and West Virginia, USA.
 
 ## 1. Overview
 NerdOutLoud is local-first with optional accounts. You can use the core features with nothing stored outside your own browser; creating an account adds cross-device sync and community lobbies, which requires storing some data on servers as described below. We show no advertising, use no analytics trackers, and do not sell personal information.
@@ -29,7 +29,7 @@ We use the information described above only to operate the Service: authenticati
 The Service is not directed to children under 13, and we do not knowingly collect personal information from children under 13. If you believe a child has provided personal information, contact us and we will delete it.
 
 ## 9. Your choices and deletion
-Local mode: clearing your browser's site data for NerdOutLoud permanently deletes locally stored information. Accounts: you can sign out at any time, and you can request deletion of your account, synced data, and lobby posts by contacting us at [YOUR CONTACT EMAIL]; we will act on verified requests within a reasonable time. Note that lobby posts are public while they exist, and other users may have seen them before deletion.
+Local mode: clearing your browser's site data for NerdOutLoud permanently deletes locally stored information. Accounts: you can sign out at any time, and you can request deletion of your account, synced data, and lobby posts by contacting us at cyber1patriot@gmail.com; we will act on verified requests within a reasonable time. Note that lobby posts are public while they exist, and other users may have seen them before deletion.
 
 ## 10. Security
 Passwords are hashed using industry-standard methods by our authentication provider, account data is protected by per-user access rules at the database level, and connections use encryption in transit. No method of storage or transmission is 100% secure; data kept in your browser is additionally protected only by your device's own security.
@@ -38,4 +38,4 @@ Passwords are hashed using industry-standard methods by our authentication provi
 If we add features that change how data is handled, we will update this policy and its effective date before those features go live.
 
 ## 12. Contact
-Privacy questions or requests: [YOUR CONTACT EMAIL].
+Privacy questions or requests: cyber1patriot@gmail.com.
