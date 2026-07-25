@@ -3706,6 +3706,9 @@ export default function NerdOutLoud() {
         <p style={{ color: C.faint, fontSize: 11, lineHeight: 1.6, maxWidth: 460, margin: "6px auto 0" }}>
           Movie data powered by TMDB. This product uses the TMDB API but is not endorsed or certified by TMDB.
         </p>
+        <p style={{ color: C.faint, fontSize: 11, lineHeight: 1.6, margin: "10px auto 0" }}>
+          © {new Date().getFullYear()} NerdOutLoud™. All rights reserved.
+        </p>
       </footer>
     </div>
   );
