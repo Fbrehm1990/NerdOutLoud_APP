@@ -717,7 +717,22 @@ input[type=range].nol-range::-moz-range-thumb { width: 18px; height: 18px; borde
   .nol-ticket { width: 100%; max-width: 100%; min-width: 0; }
   .nol-input, select.nol-input, textarea.nol-input { font-size: 16px; }
   .nol-stat-row > div { flex: 1 1 30%; min-width: 92px; padding: 10px 8px 8px; }
+  .nol-media-badges { flex-basis: 100%; justify-content: flex-start !important; margin: 6px 0 0 66px; }
+  .nol-filter-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .nol-filter-grid > div { min-width: 0 !important; flex: none !important; }
+  .nol-filter-grid > div:last-child { grid-column: span 1; }
+  .nol-howitworks { grid-template-columns: 1fr !important; }
 }
+@media (max-width: 480px) {
+  .nol-live-label { display: none; }
+}
+@media (max-width: 380px) {
+  .nol-media-row { padding-left: 12px !important; padding-right: 12px !important; }
+  h1 { font-size: 26px !important; }
+}
+.nol-media-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.nol-media-badges { display: flex; gap: 8px; flex-shrink: 0; }
+.nol-howitworks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .nol-trend-row { display: flex; gap: 12px; overflow-x: auto; padding: 4px 2px 10px; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: ${C.edge} transparent; }
 .nol-trend-card { position: relative; flex: 0 0 108px; width: 108px; background: transparent; border: none; padding: 0; cursor: pointer; text-align: left; transition: transform 0.15s ease; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 .nol-trend-card:hover { transform: translateY(-4px); }
@@ -890,10 +905,10 @@ function HowItWorks() {
     ["💬", "Talk", "Land on Nerdmunity — see what everyone else rated it, and say your piece."],
   ];
   return (
-    <div style={{ maxWidth: 680, margin: "18px auto 0", padding: "0 16px", display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center" }}>
+    <div className="nol-howitworks" style={{ maxWidth: 680, margin: "18px auto 0", padding: "0 16px" }}>
       {steps.map(([icon, title, desc], i) => (
         <div key={title} style={{
-          flex: "1 1 180px", minWidth: 160, background: C.panel, border: `1px solid ${C.edge}`,
+          background: C.panel, border: `1px solid ${C.edge}`,
           borderRadius: 10, padding: "14px 16px", textAlign: "center",
         }}>
           <div style={{ fontSize: 22, marginBottom: 4 }}>{icon}</div>
@@ -917,9 +932,16 @@ function TopBar({ goHome, openMenu, nightActive, unreadCount, onOpenNotifs }) {
       <button onClick={goHome} style={{
         background: "transparent", border: "none", cursor: "pointer",
         fontFamily: "'Bebas Neue', sans-serif", fontSize: 24, letterSpacing: "0.12em", color: C.text, padding: 0,
+        display: "flex", alignItems: "center", gap: 8, minWidth: 0,
       }}>
-        NERD<span style={{ color: C.amber }}>OUT</span>LOUD
-        {nightActive && <span style={{ color: C.green, fontSize: 14, marginLeft: 8 }}>● movie night live</span>}
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          NERD<span style={{ color: C.amber }}>OUT</span>LOUD
+        </span>
+        {nightActive && (
+          <span style={{ color: C.green, fontSize: 14, flexShrink: 0, display: "flex", alignItems: "center", gap: 4 }}>
+            ●<span className="nol-live-label">movie night live</span>
+          </span>
+        )}
       </button>
       <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
         {onOpenNotifs && (
@@ -2288,7 +2310,7 @@ function Picker({ state, setState, user }) {
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 20, alignItems: "flex-end" }}>
+      <div className="nol-filter-grid" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 20, alignItems: "flex-end" }}>
         <div style={{ flex: "1 1 140px", minWidth: 130 }}>
           <div style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, marginBottom: 8 }}>Genre</div>
           <select className="nol-input" value={mood} onChange={e => setMood(e.target.value)} disabled={locked} style={{ cursor: "pointer" }}>
@@ -2638,9 +2660,9 @@ function BoardPage({ state, setState, user, goAccount, jumpFilmId, clearJump }) 
           const isExpanded = !f.__synthetic && expandedId === f.id;
           return (
             <React.Fragment key={f.__synthetic ? "cr-" + f.__slug : f.id}>
-              <div id={f.__synthetic ? undefined : "nol-film-" + f.id} className="nol-row" onClick={() => openFilm(f)}
+              <div id={f.__synthetic ? undefined : "nol-film-" + f.id} className="nol-row nol-media-row" onClick={() => openFilm(f)}
                 style={{
-                  display: "flex", alignItems: "center", gap: 14, padding: "10px 16px", cursor: "pointer",
+                  padding: "10px 16px", cursor: "pointer",
                   borderBottom: isExpanded ? "none" : `1px solid ${C.edge}`,
                 }}>
                 <div style={{ position: "relative", flexShrink: 0 }}>
@@ -2681,7 +2703,7 @@ function BoardPage({ state, setState, user, goAccount, jumpFilmId, clearJump }) 
                   )}
                 </div>
                 {(cr || f.rating != null) && (
-                  <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                  <div className="nol-media-badges">
                     {cr && (
                       <div style={{ textAlign: "center", minWidth: 42 }}>
                         <div style={{ fontSize: 8, letterSpacing: "0.08em", textTransform: "uppercase", color: C.faint, whiteSpace: "nowrap" }}>User Ranking</div>
@@ -2945,8 +2967,8 @@ function Library({ state, setState, goToFilm }) {
           </p>
         )}
         {list.map((f, i) => (
-          <div key={f.id} className="nol-row" onClick={() => goToFilm(f.id)} style={{
-            display: "flex", alignItems: "center", gap: 14, padding: "10px 16px", cursor: "pointer",
+          <div key={f.id} className="nol-row nol-media-row" onClick={() => goToFilm(f.id)} style={{
+            padding: "10px 16px", cursor: "pointer",
             borderBottom: i < list.length - 1 ? `1px solid ${C.edge}` : "none",
           }}>
             <div style={{ position: "relative", flexShrink: 0 }}>
@@ -2986,14 +3008,16 @@ function Library({ state, setState, goToFilm }) {
                 </div>
               )}
             </div>
-            {f.rating != null && (
-              <span style={{
-                fontFamily: "'Bebas Neue', sans-serif", fontSize: 22, color: C.amber,
-                textShadow: "0 0 10px rgba(255,182,39,0.3)", flexShrink: 0,
-              }}>{f.rating.toFixed(1)}</span>
-            )}
-            <span className="nol-danger-link" style={{ flexShrink: 0 }}
-              onClick={(e) => { e.stopPropagation(); remove(f.id); }}>✕</span>
+            <div className="nol-media-badges" style={{ alignItems: "center" }}>
+              {f.rating != null && (
+                <span style={{
+                  fontFamily: "'Bebas Neue', sans-serif", fontSize: 22, color: C.amber,
+                  textShadow: "0 0 10px rgba(255,182,39,0.3)", flexShrink: 0,
+                }}>{f.rating.toFixed(1)}</span>
+              )}
+              <span className="nol-danger-link" style={{ flexShrink: 0 }}
+                onClick={(e) => { e.stopPropagation(); remove(f.id); }}>✕</span>
+            </div>
           </div>
         ))}
       </div>
