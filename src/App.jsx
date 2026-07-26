@@ -369,7 +369,7 @@ const tmdb = {
     await Promise.all(top.map(async (m, i) => {
       try {
         const d = await tmdb.filmDetails(m.id);
-        items[i] = { tid: "live" + m.id, heat: 100 - i * 3, poster: m.poster_path || null, ...tmdbToFilm(d) };
+        items[i] = { tid: "live" + m.id, tmdbId: m.id, heat: 100 - i * 3, poster: m.poster_path || null, ...tmdbToFilm(d) };
       } catch { /* skip this title */ }
     }));
     const clean = items.filter(Boolean);
@@ -377,6 +377,38 @@ const tmdb = {
       try { await store.set("nol-tmdb-trending-v2", JSON.stringify({ day: new Date().toDateString(), items: clean })); } catch { /* ignore */ }
     }
     return clean;
+  },
+  // Which movies are currently playing in US theaters — used to tell "still in
+  // theaters" apart from "already streaming" in the trending strip.
+  async nowPlayingIds() {
+    try {
+      const cached = await store.get("nol-tmdb-nowplaying");
+      if (cached) {
+        const { day, ids } = JSON.parse(cached);
+        if (day === new Date().toDateString()) return new Set(ids);
+      }
+    } catch { /* refetch */ }
+    try {
+      const r = await fetch(tmdbProxy("/movie/now_playing", { region: "US" }));
+      if (!r.ok) return new Set();
+      const j = await r.json();
+      const ids = (j.results || []).map(m => m.id);
+      try { await store.set("nol-tmdb-nowplaying", JSON.stringify({ day: new Date().toDateString(), ids })); } catch { /* ignore */ }
+      return new Set(ids);
+    } catch { return new Set(); }
+  },
+  // The official trailer (YouTube key) for a film, if TMDB has one on file.
+  async trailerKey(id) {
+    try {
+      const r = await fetch(tmdbProxy(`/movie/${id}/videos`));
+      if (!r.ok) return null;
+      const j = await r.json();
+      const vids = j.results || [];
+      const official = vids.find(v => v.site === "YouTube" && v.type === "Trailer" && v.official) ||
+        vids.find(v => v.site === "YouTube" && v.type === "Trailer") ||
+        vids.find(v => v.site === "YouTube");
+      return official ? official.key : null;
+    } catch { return null; }
   },
   // Pulls a large, currently-streaming slice for one service via TMDB's discover
   // endpoint (filtered by watch provider), cached per-service for the day.
@@ -1834,7 +1866,7 @@ function NightFlow({ state, setState, user, gated, goSignup }) {
 }
 
 // ---------------- Trending strip: what's new this week ----------------
-function TrendingStrip({ items, live, onPick }) {
+function TrendingStrip({ items, live, onPick, theaterIds, onTheaterTap }) {
   if (!items || !items.length) return null;
   return (
     <div style={{ marginBottom: 26 }}>
@@ -1847,29 +1879,125 @@ function TrendingStrip({ items, live, onPick }) {
         </span>
       </div>
       <div className="nol-trend-row">
-        {items.map((t, i) => (
-          <button key={t.tid || t.n} className="nol-trend-card" onClick={() => onPick(t, i + 1)} aria-label={`Pick ${t.n}`}>
-            {t.poster ? (
-              <img src={`https://image.tmdb.org/t/p/w185${t.poster}`} alt=""
-                style={{ width: "100%", height: 156, objectFit: "cover", borderRadius: 6, display: "block", boxShadow: "0 4px 14px rgba(0,0,0,0.45)" }} />
-            ) : (
+        {items.map((t, i) => {
+          const inTheaters = theaterIds && t.tmdbId && theaterIds.has(t.tmdbId);
+          return (
+            <button key={t.tid || t.n} className="nol-trend-card"
+              onClick={() => inTheaters ? onTheaterTap(t) : onPick(t, i + 1)}
+              aria-label={inTheaters ? `View ${t.n} — in theaters` : `Pick ${t.n}`}>
+              {t.poster ? (
+                <img src={`https://image.tmdb.org/t/p/w185${t.poster}`} alt=""
+                  style={{ width: "100%", height: 156, objectFit: "cover", borderRadius: 6, display: "block", boxShadow: "0 4px 14px rgba(0,0,0,0.45)" }} />
+              ) : (
+                <div style={{
+                  width: "100%", height: 156, borderRadius: 6, background: C.panelHi,
+                  display: "flex", alignItems: "center", justifyContent: "center", padding: 8,
+                  boxShadow: "0 4px 14px rgba(0,0,0,0.45)",
+                }}>
+                  <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 16, letterSpacing: 1, color: C.muted, textAlign: "center", lineHeight: 1.1 }}>{t.n}</span>
+                </div>
+              )}
               <div style={{
-                width: "100%", height: 156, borderRadius: 6, background: C.panelHi,
-                display: "flex", alignItems: "center", justifyContent: "center", padding: 8,
-                boxShadow: "0 4px 14px rgba(0,0,0,0.45)",
-              }}>
-                <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 16, letterSpacing: 1, color: C.muted, textAlign: "center", lineHeight: 1.1 }}>{t.n}</span>
-              </div>
+                position: "absolute", top: 6, left: 6, fontFamily: "'Bebas Neue', sans-serif",
+                fontSize: 13, background: C.amber, color: "#14120A", borderRadius: 4, padding: "2px 7px 0",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
+              }}>#{i + 1}</div>
+              {inTheaters && (
+                <div style={{
+                  position: "absolute", top: 6, right: 6, fontFamily: "'Bebas Neue', sans-serif",
+                  fontSize: 10, letterSpacing: "0.05em", background: C.red, color: C.paper, borderRadius: 4, padding: "2px 6px 0",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
+                }}>IN THEATERS</div>
+              )}
+              <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginTop: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.n}</div>
+              <div style={{ fontSize: 11, color: C.faint }}>{t.y} · {inTheaters ? "in theaters" : t.svc}</div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ---------------- Theater detail: overview, trailer, ticket links ----------------
+function TheaterModal({ film, onClose }) {
+  const [details, setDetails] = useState(null);
+  const [trailerKey, setTrailerKey] = useState(null);
+  const [showTrailer, setShowTrailer] = useState(false);
+
+  useEffect(() => {
+    if (!film || !film.tmdbId) return;
+    let on = true;
+    tmdb.filmDetails(film.tmdbId).then(d => { if (on) setDetails(d); }).catch(() => {});
+    tmdb.trailerKey(film.tmdbId).then(k => { if (on) setTrailerKey(k); }).catch(() => {});
+    return () => { on = false; };
+  }, [film && film.tmdbId]);
+
+  if (!film) return null;
+  const overview = (details && details.overview) || film.syn || "";
+  const q = encodeURIComponent(film.n);
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 45 }}>
+      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(5,6,14,0.82)" }} />
+      <div className="nol-fade" style={{
+        position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)",
+        width: "min(480px, 92vw)", maxHeight: "88vh", overflowY: "auto",
+        background: C.panel, border: `1px solid ${C.edge}`, borderRadius: 12,
+        boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
+      }}>
+        <div style={{ position: "relative" }}>
+          {showTrailer && trailerKey ? (
+            <div style={{ position: "relative", paddingTop: "56.25%", background: "#000" }}>
+              <iframe
+                src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1`}
+                title="Trailer" allow="autoplay; encrypted-media" allowFullScreen
+                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
+              />
+            </div>
+          ) : film.poster ? (
+            <img src={`https://image.tmdb.org/t/p/w500${film.poster}`} alt="" style={{ width: "100%", display: "block" }} />
+          ) : null}
+          <button onClick={onClose} aria-label="Close" style={{
+            position: "absolute", top: 10, right: 10, width: 34, height: 34, borderRadius: "50%",
+            background: "rgba(13,15,30,0.8)", border: `1px solid ${C.edge}`, color: C.text, fontSize: 16, cursor: "pointer",
+          }}>✕</button>
+          <div style={{
+            position: "absolute", top: 10, left: 10, fontFamily: "'Bebas Neue', sans-serif",
+            fontSize: 11, letterSpacing: "0.1em", background: C.red, color: C.paper, borderRadius: 4, padding: "3px 8px 1px",
+          }}>IN THEATERS</div>
+        </div>
+        <div style={{ padding: "18px 20px 22px" }}>
+          <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 26, letterSpacing: "0.04em", color: C.text, lineHeight: 1.1 }}>{film.n}</div>
+          <div style={{ color: C.muted, fontSize: 13, marginTop: 4 }}>
+            {film.y}{film.d && film.d !== "Unknown" ? ` · dir. ${film.d}` : ""}{film.rt ? ` · ${film.rt} min` : ""}
+          </div>
+          {overview && (
+            <p style={{ color: C.muted, fontSize: 14, lineHeight: 1.6, marginTop: 12 }}>{overview}</p>
+          )}
+          {!overview && !details && (
+            <p style={{ color: C.faint, fontSize: 13, marginTop: 12 }}>Loading synopsis…</p>
+          )}
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
+            {trailerKey && !showTrailer && (
+              <button className="nol-btn" onClick={() => setShowTrailer(true)}>▶ Play trailer</button>
             )}
-            <div style={{
-              position: "absolute", top: 6, left: 6, fontFamily: "'Bebas Neue', sans-serif",
-              fontSize: 13, background: C.amber, color: "#14120A", borderRadius: 4, padding: "2px 7px 0",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
-            }}>#{i + 1}</div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginTop: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.n}</div>
-            <div style={{ fontSize: 11, color: C.faint }}>{t.y} · {t.svc}</div>
-          </button>
-        ))}
+          </div>
+          <div style={{ marginTop: 20, borderTop: `1px solid ${C.edge}`, paddingTop: 16 }}>
+            <div style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, marginBottom: 10 }}>
+              Get tickets
+            </div>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <a href={`https://www.fandango.com/search?q=${q}`} target="_blank" rel="noopener noreferrer" className="nol-btn" style={{ textDecoration: "none" }}>Fandango</a>
+              <a href={`https://www.atomtickets.com/search?q=${q}`} target="_blank" rel="noopener noreferrer" className="nol-ghost" style={{ textDecoration: "none" }}>Atom Tickets</a>
+              <a href={`https://www.amctheatres.com/search?q=${q}`} target="_blank" rel="noopener noreferrer" className="nol-ghost" style={{ textDecoration: "none" }}>AMC</a>
+            </div>
+            <p style={{ color: C.faint, fontSize: 11, marginTop: 10, lineHeight: 1.5 }}>
+              These links take you to each site's own search results — NerdOutLoud isn't affiliated with
+              Fandango, Atom Tickets, or AMC, and doesn't process ticket purchases.
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -2003,7 +2131,18 @@ function Picker({ state, setState, user }) {
   const [liveCatalog, setLiveCatalog] = useState({});   // { "Netflix::any": [...], "Netflix::PG-13": [...] }
   const [loadingSvcs, setLoadingSvcs] = useState({});
   const [communityRatings, setCommunityRatings] = useState(null);
+  const [theaterIds, setTheaterIds] = useState(null);
+  const [theaterFilm, setTheaterFilm] = useState(null);
   const timer = useRef(null);
+
+  // Which trending titles are still in theaters — those get a detail view
+  // (overview, trailer, tickets) instead of being spun into a movie night.
+  useEffect(() => {
+    if (!tmdb.enabled()) return;
+    let on = true;
+    tmdb.nowPlayingIds().then(ids => { if (on) setTheaterIds(ids); }).catch(() => { /* quiet */ });
+    return () => { on = false; };
+  }, []);
 
   // Loaded once — lets the landed card show "Nerdmunity rates it 8.2" without
   // any extra clicks or navigation, straight from the same data Nerdmunity uses.
@@ -2277,12 +2416,15 @@ function Picker({ state, setState, user }) {
 
   return (
     <div className="nol-fade" style={{ maxWidth: 680, margin: "0 auto", padding: "18px 16px 8px" }}>
-      <TrendingStrip items={liveTrending || TRENDING} live={!!liveTrending} onPick={(t, rank) => {
-        if (phase === "spinning") return;
-        setDisplay({ ...t, __manual: true });
-        setWhy(`#${rank} trending this week`);
-        setPhase("landed");
-      }} />
+      <TrendingStrip items={liveTrending || TRENDING} live={!!liveTrending} theaterIds={theaterIds}
+        onTheaterTap={(t) => setTheaterFilm(t)}
+        onPick={(t, rank) => {
+          if (phase === "spinning") return;
+          setDisplay({ ...t, __manual: true });
+          setWhy(`#${rank} trending this week`);
+          setPhase("landed");
+        }} />
+      {theaterFilm && <TheaterModal film={theaterFilm} onClose={() => setTheaterFilm(null)} />}
       <SectionHead kicker="The main attraction" title="What are we watching?"
         sub="Choose how it picks, spin once, and the scrolling is over. One veto per night." />
 
