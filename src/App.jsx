@@ -381,21 +381,31 @@ const tmdb = {
   // Which movies are currently playing in US theaters — used to tell "still in
   // theaters" apart from "already streaming" in the trending strip.
   async nowPlayingIds() {
+    const cacheKey = "nol-tmdb-nowplaying-v2";
     try {
-      const cached = await store.get("nol-tmdb-nowplaying");
+      const cached = await store.get(cacheKey);
       if (cached) {
         const { day, ids } = JSON.parse(cached);
         if (day === new Date().toDateString()) return new Set(ids);
       }
     } catch { /* refetch */ }
+    // One page is only 20 titles — there are usually 50-100+ movies actually in
+    // US theaters at once, so a trending release can easily sit past page 1.
+    let all = [];
     try {
-      const r = await fetch(tmdbProxy("/movie/now_playing", { region: "US" }));
-      if (!r.ok) return new Set();
-      const j = await r.json();
-      const ids = (j.results || []).map(m => m.id);
-      try { await store.set("nol-tmdb-nowplaying", JSON.stringify({ day: new Date().toDateString(), ids })); } catch { /* ignore */ }
-      return new Set(ids);
-    } catch { return new Set(); }
+      for (let page = 1; page <= 5; page++) {
+        const r = await fetch(tmdbProxy("/movie/now_playing", { region: "US", page: String(page) }));
+        if (!r.ok) break;
+        const j = await r.json();
+        all = all.concat(j.results || []);
+        if (page >= (j.total_pages || 1)) break;
+      }
+    } catch { /* use whatever we got */ }
+    const ids = all.map(m => m.id);
+    if (ids.length) {
+      try { await store.set(cacheKey, JSON.stringify({ day: new Date().toDateString(), ids })); } catch { /* ignore */ }
+    }
+    return new Set(ids);
   },
   // The official trailer (YouTube key) for a film, if TMDB has one on file.
   async trailerKey(id) {
