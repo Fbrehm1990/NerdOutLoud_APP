@@ -408,6 +408,32 @@ const tmdb = {
     }
     return new Set(ids);
   },
+  // Same pattern as nowPlayingIds, for films that haven't opened in theaters yet.
+  async upcomingIds() {
+    const cacheKey = "nol-tmdb-upcoming-v1";
+    try {
+      const cached = await store.get(cacheKey);
+      if (cached) {
+        const { day, ids } = JSON.parse(cached);
+        if (day === new Date().toDateString()) return new Set(ids);
+      }
+    } catch { /* refetch */ }
+    let all = [];
+    try {
+      for (let page = 1; page <= 5; page++) {
+        const r = await fetch(tmdbProxy("/movie/upcoming", { region: "US", page: String(page) }));
+        if (!r.ok) break;
+        const j = await r.json();
+        all = all.concat(j.results || []);
+        if (page >= (j.total_pages || 1)) break;
+      }
+    } catch { /* use whatever we got */ }
+    const ids = all.map(m => m.id);
+    if (ids.length) {
+      try { await store.set(cacheKey, JSON.stringify({ day: new Date().toDateString(), ids })); } catch { /* ignore */ }
+    }
+    return new Set(ids);
+  },
   // The official trailer (YouTube key) for a film, if TMDB has one on file.
   async trailerKey(id) {
     try {
@@ -1893,7 +1919,7 @@ function NightFlow({ state, setState, user, gated, goSignup }) {
 }
 
 // ---------------- Trending strip: what's new this week ----------------
-function TrendingStrip({ items, live, onPick, theaterIds, onOverview, onTrailer, onTickets }) {
+function TrendingStrip({ items, live, onPick, theaterIds, upcomingIds, onOverview, onTrailer, onTickets, onReleaseDate }) {
   const [revealedId, setRevealedId] = useState(null);
   if (!items || !items.length) return null;
   return (
@@ -1909,14 +1935,16 @@ function TrendingStrip({ items, live, onPick, theaterIds, onOverview, onTrailer,
       <div className="nol-trend-row">
         {items.map((t, i) => {
           const inTheaters = theaterIds && t.tmdbId && theaterIds.has(t.tmdbId);
+          const comingSoon = !inTheaters && upcomingIds && t.tmdbId && upcomingIds.has(t.tmdbId);
+          const special = inTheaters || comingSoon;
           const revealed = revealedId === (t.tid || t.n);
           return (
-            <div key={t.tid || t.n} className={`nol-trend-card${inTheaters ? " nol-theater-card" : ""}`}
+            <div key={t.tid || t.n} className={`nol-trend-card${special ? " nol-theater-card" : ""}`}
               onClick={() => {
-                if (!inTheaters) { onPick(t, i + 1); return; }
+                if (!special) { onPick(t, i + 1); return; }
                 setRevealedId(revealed ? null : (t.tid || t.n));
               }}
-              role="button" tabIndex={0} aria-label={inTheaters ? `${t.n} — in theaters, choose an option` : `Pick ${t.n}`}>
+              role="button" tabIndex={0} aria-label={special ? `${t.n} — choose an option` : `Pick ${t.n}`}>
               {t.poster ? (
                 <img src={`https://image.tmdb.org/t/p/w185${t.poster}`} alt=""
                   style={{ width: "100%", height: 156, objectFit: "cover", borderRadius: 6, display: "block", boxShadow: "0 4px 14px rgba(0,0,0,0.45)" }} />
@@ -1941,15 +1969,26 @@ function TrendingStrip({ items, live, onPick, theaterIds, onOverview, onTrailer,
                   boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
                 }}>IN THEATERS</div>
               )}
-              {inTheaters && (
+              {comingSoon && (
+                <div style={{
+                  position: "absolute", top: 6, right: 6, fontFamily: "'Bebas Neue', sans-serif",
+                  fontSize: 10, letterSpacing: "0.05em", background: C.green, color: "#0E2A1E", borderRadius: 4, padding: "2px 6px 0",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
+                }}>COMING SOON</div>
+              )}
+              {special && (
                 <div className={`nol-theater-overlay${revealed ? " revealed" : ""}`}>
                   <button className="nol-theater-opt" onClick={(e) => { e.stopPropagation(); onOverview(t); }}>Overview</button>
                   <button className="nol-theater-opt" onClick={(e) => { e.stopPropagation(); onTrailer(t); }}>Trailer</button>
-                  <button className="nol-theater-opt" onClick={(e) => { e.stopPropagation(); onTickets(t); }}>Buy Tickets</button>
+                  {inTheaters ? (
+                    <button className="nol-theater-opt" onClick={(e) => { e.stopPropagation(); onTickets(t); }}>Buy Tickets</button>
+                  ) : (
+                    <button className="nol-theater-opt" onClick={(e) => { e.stopPropagation(); onReleaseDate(t); }}>Release Date</button>
+                  )}
                 </div>
               )}
               <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginTop: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.n}</div>
-              <div style={{ fontSize: 11, color: C.faint }}>{t.y} · {inTheaters ? "in theaters" : t.svc}</div>
+              <div style={{ fontSize: 11, color: C.faint }}>{t.y} · {inTheaters ? "in theaters" : comingSoon ? "coming soon" : t.svc}</div>
             </div>
           );
         })}
@@ -2063,6 +2102,46 @@ function TicketsModal({ film, onClose }) {
           These links take you to each site's own search results — NerdOutLoud isn't affiliated with
           Fandango, Atom Tickets, or AMC, and doesn't process ticket purchases.
         </p>
+      </div>
+    </TheaterModalShell>
+  );
+}
+
+function ReleaseDateModal({ film, onClose }) {
+  const [details, setDetails] = useState(null);
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    if (!film || !film.tmdbId) return;
+    let on = true;
+    tmdb.filmDetails(film.tmdbId).then(d => { if (on) { setDetails(d); setLoaded(true); } }).catch(() => { if (on) setLoaded(true); });
+    return () => { on = false; };
+  }, [film && film.tmdbId]);
+  if (!film) return null;
+  const raw = details && details.release_date;
+  const formatted = raw ? new Date(raw + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" }) : null;
+  const daysAway = raw ? Math.ceil((new Date(raw + "T00:00:00") - new Date(new Date().toDateString())) / 86400000) : null;
+  return (
+    <TheaterModalShell onClose={onClose}>
+      {film.poster && <img src={`https://image.tmdb.org/t/p/w500${film.poster}`} alt="" style={{ width: "100%", display: "block", borderRadius: "12px 12px 0 0" }} />}
+      <div style={{ padding: "18px 20px 22px", textAlign: "center" }}>
+        <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 24, letterSpacing: "0.04em", color: C.text, lineHeight: 1.1 }}>{film.n}</div>
+        <div style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, margin: "16px 0 6px" }}>
+          Coming to theaters
+        </div>
+        {formatted ? (
+          <>
+            <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 26, color: C.amber, textShadow: "0 0 16px rgba(255,182,39,0.3)" }}>
+              {formatted}
+            </div>
+            {daysAway != null && daysAway > 0 && (
+              <div style={{ color: C.faint, fontSize: 12, marginTop: 6 }}>{daysAway} day{daysAway === 1 ? "" : "s"} away</div>
+            )}
+          </>
+        ) : loaded ? (
+          <p style={{ color: C.muted, fontSize: 14 }}>No confirmed date on file yet.</p>
+        ) : (
+          <p style={{ color: C.faint, fontSize: 13 }}>Loading release date…</p>
+        )}
       </div>
     </TheaterModalShell>
   );
@@ -2197,16 +2276,18 @@ function Picker({ state, setState, user }) {
   const [loadingSvcs, setLoadingSvcs] = useState({});
   const [communityRatings, setCommunityRatings] = useState(null);
   const [theaterIds, setTheaterIds] = useState(null);
+  const [upcomingIds, setUpcomingIds] = useState(null);
   const [theaterFilm, setTheaterFilm] = useState(null);
-  const [theaterMode, setTheaterMode] = useState(null); // "overview" | "trailer" | "tickets"
+  const [theaterMode, setTheaterMode] = useState(null); // "overview" | "trailer" | "tickets" | "release"
   const timer = useRef(null);
 
-  // Which trending titles are still in theaters — those get a detail view
-  // (overview, trailer, tickets) instead of being spun into a movie night.
+  // Which trending titles are still in theaters, or not out yet — those get a
+  // detail view (overview, trailer, tickets/release date) instead of a movie night.
   useEffect(() => {
     if (!tmdb.enabled()) return;
     let on = true;
     tmdb.nowPlayingIds().then(ids => { if (on) setTheaterIds(ids); }).catch(() => { /* quiet */ });
+    tmdb.upcomingIds().then(ids => { if (on) setUpcomingIds(ids); }).catch(() => { /* quiet */ });
     return () => { on = false; };
   }, []);
 
@@ -2482,10 +2563,11 @@ function Picker({ state, setState, user }) {
 
   return (
     <div className="nol-fade" style={{ maxWidth: 680, margin: "0 auto", padding: "18px 16px 8px" }}>
-      <TrendingStrip items={liveTrending || TRENDING} live={!!liveTrending} theaterIds={theaterIds}
+      <TrendingStrip items={liveTrending || TRENDING} live={!!liveTrending} theaterIds={theaterIds} upcomingIds={upcomingIds}
         onOverview={(t) => { setTheaterFilm(t); setTheaterMode("overview"); }}
         onTrailer={(t) => { setTheaterFilm(t); setTheaterMode("trailer"); }}
         onTickets={(t) => { setTheaterFilm(t); setTheaterMode("tickets"); }}
+        onReleaseDate={(t) => { setTheaterFilm(t); setTheaterMode("release"); }}
         onPick={(t, rank) => {
           if (phase === "spinning") return;
           setDisplay({ ...t, __manual: true });
@@ -2495,6 +2577,7 @@ function Picker({ state, setState, user }) {
       {theaterFilm && theaterMode === "overview" && <OverviewModal film={theaterFilm} onClose={() => setTheaterMode(null)} />}
       {theaterFilm && theaterMode === "trailer" && <TrailerModal film={theaterFilm} onClose={() => setTheaterMode(null)} />}
       {theaterFilm && theaterMode === "tickets" && <TicketsModal film={theaterFilm} onClose={() => setTheaterMode(null)} />}
+      {theaterFilm && theaterMode === "release" && <ReleaseDateModal film={theaterFilm} onClose={() => setTheaterMode(null)} />}
       <SectionHead kicker="The main attraction" title="What are we watching?"
         sub="Choose how it picks, spin once, and the scrolling is over. One veto per night." />
 
