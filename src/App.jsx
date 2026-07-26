@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { createClient } from "@supabase/supabase-js";
 
 // ---------- Portable storage: uses Claude's window.storage when present,
@@ -777,6 +778,22 @@ input[type=range].nol-range::-moz-range-thumb { width: 18px; height: 18px; borde
 .nol-howitworks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .nol-trend-row { display: flex; gap: 12px; overflow-x: auto; padding: 4px 2px 10px; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: ${C.edge} transparent; }
 .nol-trend-card { position: relative; flex: 0 0 108px; width: 108px; background: transparent; border: none; padding: 0; cursor: pointer; text-align: left; transition: transform 0.15s ease; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.nol-theater-overlay {
+  position: absolute; top: 0; left: 0; right: 0; height: 156px; border-radius: 6px;
+  background: rgba(5,6,14,0.88); display: flex; flex-direction: column; align-items: stretch;
+  justify-content: center; gap: 6px; padding: 10px; opacity: 0; pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+.nol-theater-overlay.revealed { opacity: 1; pointer-events: auto; }
+@media (hover: hover) {
+  .nol-theater-card:hover .nol-theater-overlay { opacity: 1; pointer-events: auto; }
+}
+.nol-theater-opt {
+  background: ${C.panel}; border: 1px solid ${C.amber}; color: ${C.amber}; border-radius: 5px;
+  padding: 7px 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; cursor: pointer;
+  text-transform: uppercase; transition: background 0.12s ease, color 0.12s ease;
+}
+.nol-theater-opt:hover { background: ${C.amber}; color: #14120A; }
 .nol-trend-card:hover { transform: translateY(-4px); }
 .nol-avatar { flex-shrink: 0; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.5px; color: #14120A; box-shadow: 0 2px 6px rgba(0,0,0,0.4); }
 .nol-react-pill { font-size: 12px; border: 1px solid ${C.edge}; background: ${C.panel}; border-radius: 999px; padding: 3px 9px 1px; cursor: pointer; transition: all 0.15s ease; display: inline-flex; align-items: center; gap: 4px; }
@@ -1876,7 +1893,8 @@ function NightFlow({ state, setState, user, gated, goSignup }) {
 }
 
 // ---------------- Trending strip: what's new this week ----------------
-function TrendingStrip({ items, live, onPick, theaterIds, onTheaterTap }) {
+function TrendingStrip({ items, live, onPick, theaterIds, onOverview, onTrailer, onTickets }) {
+  const [revealedId, setRevealedId] = useState(null);
   if (!items || !items.length) return null;
   return (
     <div style={{ marginBottom: 26 }}>
@@ -1891,10 +1909,14 @@ function TrendingStrip({ items, live, onPick, theaterIds, onTheaterTap }) {
       <div className="nol-trend-row">
         {items.map((t, i) => {
           const inTheaters = theaterIds && t.tmdbId && theaterIds.has(t.tmdbId);
+          const revealed = revealedId === (t.tid || t.n);
           return (
-            <button key={t.tid || t.n} className="nol-trend-card"
-              onClick={() => inTheaters ? onTheaterTap(t) : onPick(t, i + 1)}
-              aria-label={inTheaters ? `View ${t.n} — in theaters` : `Pick ${t.n}`}>
+            <div key={t.tid || t.n} className={`nol-trend-card${inTheaters ? " nol-theater-card" : ""}`}
+              onClick={() => {
+                if (!inTheaters) { onPick(t, i + 1); return; }
+                setRevealedId(revealed ? null : (t.tid || t.n));
+              }}
+              role="button" tabIndex={0} aria-label={inTheaters ? `${t.n} — in theaters, choose an option` : `Pick ${t.n}`}>
               {t.poster ? (
                 <img src={`https://image.tmdb.org/t/p/w185${t.poster}`} alt=""
                   style={{ width: "100%", height: 156, objectFit: "cover", borderRadius: 6, display: "block", boxShadow: "0 4px 14px rgba(0,0,0,0.45)" }} />
@@ -1919,9 +1941,16 @@ function TrendingStrip({ items, live, onPick, theaterIds, onTheaterTap }) {
                   boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
                 }}>IN THEATERS</div>
               )}
+              {inTheaters && (
+                <div className={`nol-theater-overlay${revealed ? " revealed" : ""}`}>
+                  <button className="nol-theater-opt" onClick={(e) => { e.stopPropagation(); onOverview(t); }}>Overview</button>
+                  <button className="nol-theater-opt" onClick={(e) => { e.stopPropagation(); onTrailer(t); }}>Trailer</button>
+                  <button className="nol-theater-opt" onClick={(e) => { e.stopPropagation(); onTickets(t); }}>Buy Tickets</button>
+                </div>
+              )}
               <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginTop: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.n}</div>
               <div style={{ fontSize: 11, color: C.faint }}>{t.y} · {inTheaters ? "in theaters" : t.svc}</div>
-            </button>
+            </div>
           );
         })}
       </div>
@@ -1929,87 +1958,113 @@ function TrendingStrip({ items, live, onPick, theaterIds, onTheaterTap }) {
   );
 }
 
-// ---------------- Theater detail: overview, trailer, ticket links ----------------
-function TheaterModal({ film, onClose }) {
-  const [details, setDetails] = useState(null);
-  const [trailerKey, setTrailerKey] = useState(null);
-  const [showTrailer, setShowTrailer] = useState(false);
+// A small, focused modal shell shared by the three theater actions — rendered via
+// a portal straight to <body>, so it's never trapped inside an ancestor's transform
+// (an animated parent element can silently break position:fixed otherwise).
+function TheaterModalShell({ onClose, children, width }) {
+  return createPortal(
+    <div style={{ position: "fixed", inset: 0, zIndex: 50 }}>
+      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(5,6,14,0.82)" }} />
+      <div className="nol-fade" style={{
+        position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)",
+        width: width || "min(420px, 92vw)", maxHeight: "88vh", overflowY: "auto",
+        background: C.panel, border: `1px solid ${C.edge}`, borderRadius: 12,
+        boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
+      }}>
+        <button onClick={onClose} aria-label="Close" style={{
+          position: "absolute", top: 10, right: 10, width: 32, height: 32, borderRadius: "50%",
+          background: "rgba(13,15,30,0.85)", border: `1px solid ${C.edge}`, color: C.text, fontSize: 15, cursor: "pointer", zIndex: 1,
+        }}>✕</button>
+        {children}
+      </div>
+    </div>,
+    document.body
+  );
+}
 
+function OverviewModal({ film, onClose }) {
+  const [details, setDetails] = useState(null);
   useEffect(() => {
     if (!film || !film.tmdbId) return;
     let on = true;
     tmdb.filmDetails(film.tmdbId).then(d => { if (on) setDetails(d); }).catch(() => {});
-    tmdb.trailerKey(film.tmdbId).then(k => { if (on) setTrailerKey(k); }).catch(() => {});
     return () => { on = false; };
   }, [film && film.tmdbId]);
-
   if (!film) return null;
   const overview = (details && details.overview) || film.syn || "";
-  const q = encodeURIComponent(film.n);
-
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 45 }}>
-      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(5,6,14,0.82)" }} />
-      <div className="nol-fade" style={{
-        position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)",
-        width: "min(480px, 92vw)", maxHeight: "88vh", overflowY: "auto",
-        background: C.panel, border: `1px solid ${C.edge}`, borderRadius: 12,
-        boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
-      }}>
-        <div style={{ position: "relative" }}>
-          {showTrailer && trailerKey ? (
-            <div style={{ position: "relative", paddingTop: "56.25%", background: "#000" }}>
-              <iframe
-                src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1`}
-                title="Trailer" allow="autoplay; encrypted-media" allowFullScreen
-                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
-              />
-            </div>
-          ) : film.poster ? (
-            <img src={`https://image.tmdb.org/t/p/w500${film.poster}`} alt="" style={{ width: "100%", display: "block" }} />
-          ) : null}
-          <button onClick={onClose} aria-label="Close" style={{
-            position: "absolute", top: 10, right: 10, width: 34, height: 34, borderRadius: "50%",
-            background: "rgba(13,15,30,0.8)", border: `1px solid ${C.edge}`, color: C.text, fontSize: 16, cursor: "pointer",
-          }}>✕</button>
-          <div style={{
-            position: "absolute", top: 10, left: 10, fontFamily: "'Bebas Neue', sans-serif",
-            fontSize: 11, letterSpacing: "0.1em", background: C.red, color: C.paper, borderRadius: 4, padding: "3px 8px 1px",
-          }}>IN THEATERS</div>
+    <TheaterModalShell onClose={onClose}>
+      {film.poster && <img src={`https://image.tmdb.org/t/p/w500${film.poster}`} alt="" style={{ width: "100%", display: "block", borderRadius: "12px 12px 0 0" }} />}
+      <div style={{ padding: "18px 20px 22px" }}>
+        <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 24, letterSpacing: "0.04em", color: C.text, lineHeight: 1.1 }}>{film.n}</div>
+        <div style={{ color: C.muted, fontSize: 13, marginTop: 4 }}>
+          {film.y}{film.d && film.d !== "Unknown" ? ` · dir. ${film.d}` : ""}{film.rt ? ` · ${film.rt} min` : ""}
         </div>
-        <div style={{ padding: "18px 20px 22px" }}>
-          <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 26, letterSpacing: "0.04em", color: C.text, lineHeight: 1.1 }}>{film.n}</div>
-          <div style={{ color: C.muted, fontSize: 13, marginTop: 4 }}>
-            {film.y}{film.d && film.d !== "Unknown" ? ` · dir. ${film.d}` : ""}{film.rt ? ` · ${film.rt} min` : ""}
-          </div>
-          {overview && (
-            <p style={{ color: C.muted, fontSize: 14, lineHeight: 1.6, marginTop: 12 }}>{overview}</p>
-          )}
-          {!overview && !details && (
-            <p style={{ color: C.faint, fontSize: 13, marginTop: 12 }}>Loading synopsis…</p>
-          )}
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
-            {trailerKey && !showTrailer && (
-              <button className="nol-btn" onClick={() => setShowTrailer(true)}>▶ Play trailer</button>
-            )}
-          </div>
-          <div style={{ marginTop: 20, borderTop: `1px solid ${C.edge}`, paddingTop: 16 }}>
-            <div style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, marginBottom: 10 }}>
-              Get tickets
-            </div>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <a href={`https://www.fandango.com/search?q=${q}`} target="_blank" rel="noopener noreferrer" className="nol-btn" style={{ textDecoration: "none" }}>Fandango</a>
-              <a href={`https://www.atomtickets.com/search?q=${q}`} target="_blank" rel="noopener noreferrer" className="nol-ghost" style={{ textDecoration: "none" }}>Atom Tickets</a>
-              <a href={`https://www.amctheatres.com/search?q=${q}`} target="_blank" rel="noopener noreferrer" className="nol-ghost" style={{ textDecoration: "none" }}>AMC</a>
-            </div>
-            <p style={{ color: C.faint, fontSize: 11, marginTop: 10, lineHeight: 1.5 }}>
-              These links take you to each site's own search results — NerdOutLoud isn't affiliated with
-              Fandango, Atom Tickets, or AMC, and doesn't process ticket purchases.
-            </p>
-          </div>
-        </div>
+        {overview ? (
+          <p style={{ color: C.muted, fontSize: 14, lineHeight: 1.6, marginTop: 12 }}>{overview}</p>
+        ) : (
+          <p style={{ color: C.faint, fontSize: 13, marginTop: 12 }}>Loading synopsis…</p>
+        )}
       </div>
-    </div>
+    </TheaterModalShell>
+  );
+}
+
+function TrailerModal({ film, onClose }) {
+  const [trailerKey, setTrailerKey] = useState(null);
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    if (!film || !film.tmdbId) return;
+    let on = true;
+    tmdb.trailerKey(film.tmdbId).then(k => { if (on) { setTrailerKey(k); setLoaded(true); } }).catch(() => { if (on) setLoaded(true); });
+    return () => { on = false; };
+  }, [film && film.tmdbId]);
+  if (!film) return null;
+  return (
+    <TheaterModalShell onClose={onClose} width="min(640px, 92vw)">
+      <div style={{ padding: "18px 20px" }}>
+        <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 22, letterSpacing: "0.04em", color: C.text, marginBottom: 12 }}>{film.n} — Trailer</div>
+        {trailerKey ? (
+          <div style={{ position: "relative", paddingTop: "56.25%", background: "#000", borderRadius: 8, overflow: "hidden" }}>
+            <iframe
+              src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1`}
+              title="Trailer" allow="autoplay; encrypted-media" allowFullScreen
+              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
+            />
+          </div>
+        ) : loaded ? (
+          <p style={{ color: C.muted, fontSize: 14, lineHeight: 1.6, textAlign: "center", padding: "30px 10px" }}>
+            No trailer on file for this one yet.
+          </p>
+        ) : (
+          <p style={{ color: C.faint, fontSize: 13, textAlign: "center", padding: "30px 10px" }}>Loading trailer…</p>
+        )}
+      </div>
+    </TheaterModalShell>
+  );
+}
+
+function TicketsModal({ film, onClose }) {
+  if (!film) return null;
+  const q = encodeURIComponent(film.n);
+  return (
+    <TheaterModalShell onClose={onClose}>
+      <div style={{ padding: "20px 20px 22px" }}>
+        <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 22, letterSpacing: "0.04em", color: C.text, marginBottom: 4 }}>{film.n}</div>
+        <div style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, margin: "14px 0 10px" }}>
+          Get tickets
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <a href={`https://www.fandango.com/search?q=${q}`} target="_blank" rel="noopener noreferrer" className="nol-btn" style={{ textDecoration: "none", textAlign: "center" }}>Fandango</a>
+          <a href={`https://www.atomtickets.com/search?q=${q}`} target="_blank" rel="noopener noreferrer" className="nol-ghost" style={{ textDecoration: "none", textAlign: "center" }}>Atom Tickets</a>
+          <a href={`https://www.amctheatres.com/search?q=${q}`} target="_blank" rel="noopener noreferrer" className="nol-ghost" style={{ textDecoration: "none", textAlign: "center" }}>AMC</a>
+        </div>
+        <p style={{ color: C.faint, fontSize: 11, marginTop: 14, lineHeight: 1.5 }}>
+          These links take you to each site's own search results — NerdOutLoud isn't affiliated with
+          Fandango, Atom Tickets, or AMC, and doesn't process ticket purchases.
+        </p>
+      </div>
+    </TheaterModalShell>
   );
 }
 
@@ -2143,6 +2198,7 @@ function Picker({ state, setState, user }) {
   const [communityRatings, setCommunityRatings] = useState(null);
   const [theaterIds, setTheaterIds] = useState(null);
   const [theaterFilm, setTheaterFilm] = useState(null);
+  const [theaterMode, setTheaterMode] = useState(null); // "overview" | "trailer" | "tickets"
   const timer = useRef(null);
 
   // Which trending titles are still in theaters — those get a detail view
@@ -2427,14 +2483,18 @@ function Picker({ state, setState, user }) {
   return (
     <div className="nol-fade" style={{ maxWidth: 680, margin: "0 auto", padding: "18px 16px 8px" }}>
       <TrendingStrip items={liveTrending || TRENDING} live={!!liveTrending} theaterIds={theaterIds}
-        onTheaterTap={(t) => setTheaterFilm(t)}
+        onOverview={(t) => { setTheaterFilm(t); setTheaterMode("overview"); }}
+        onTrailer={(t) => { setTheaterFilm(t); setTheaterMode("trailer"); }}
+        onTickets={(t) => { setTheaterFilm(t); setTheaterMode("tickets"); }}
         onPick={(t, rank) => {
           if (phase === "spinning") return;
           setDisplay({ ...t, __manual: true });
           setWhy(`#${rank} trending this week`);
           setPhase("landed");
         }} />
-      {theaterFilm && <TheaterModal film={theaterFilm} onClose={() => setTheaterFilm(null)} />}
+      {theaterFilm && theaterMode === "overview" && <OverviewModal film={theaterFilm} onClose={() => setTheaterMode(null)} />}
+      {theaterFilm && theaterMode === "trailer" && <TrailerModal film={theaterFilm} onClose={() => setTheaterMode(null)} />}
+      {theaterFilm && theaterMode === "tickets" && <TicketsModal film={theaterFilm} onClose={() => setTheaterMode(null)} />}
       <SectionHead kicker="The main attraction" title="What are we watching?"
         sub="Choose how it picks, spin once, and the scrolling is over. One veto per night." />
 
