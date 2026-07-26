@@ -355,7 +355,7 @@ const tmdb = {
   },
   async trending() {
     try {
-      const cached = await store.get("nol-tmdb-trending-v2");
+      const cached = await store.get("nol-tmdb-trending-v3");
       if (cached) {
         const { day, items } = JSON.parse(cached);
         if (day === new Date().toDateString() && items && items.length) return items;
@@ -374,7 +374,7 @@ const tmdb = {
     }));
     const clean = items.filter(Boolean);
     if (clean.length) {
-      try { await store.set("nol-tmdb-trending-v2", JSON.stringify({ day: new Date().toDateString(), items: clean })); } catch { /* ignore */ }
+      try { await store.set("nol-tmdb-trending-v3", JSON.stringify({ day: new Date().toDateString(), items: clean })); } catch { /* ignore */ }
     }
     return clean;
   },
