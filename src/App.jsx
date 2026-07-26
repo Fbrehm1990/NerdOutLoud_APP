@@ -2002,11 +2002,13 @@ function TrendingStrip({ items, live, onPick, theaterIds, upcomingIds, onOvervie
 // (an animated parent element can silently break position:fixed otherwise).
 function TheaterModalShell({ onClose, children, width }) {
   return createPortal(
-    <div style={{ position: "fixed", inset: 0, zIndex: 50 }}>
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 50,
+      display: "flex", alignItems: "center", justifyContent: "center", padding: 16,
+    }}>
       <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(5,6,14,0.82)" }} />
       <div className="nol-fade" style={{
-        position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)",
-        width: width || "min(420px, 92vw)", maxHeight: "88vh", overflowY: "auto",
+        position: "relative", width: width || "min(420px, 92vw)", maxHeight: "88vh", overflowY: "auto",
         background: C.panel, border: `1px solid ${C.edge}`, borderRadius: 12,
         boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
       }}>
