@@ -2033,6 +2033,8 @@ function OverviewModal({ film, onClose }) {
   }, [film && film.tmdbId]);
   if (!film) return null;
   const overview = (details && details.overview) || film.syn || "";
+  const cast = (details && details.credits && details.credits.cast) || [];
+  const topCast = cast.slice(0, 6);
   return (
     <TheaterModalShell onClose={onClose}>
       {film.poster && <img src={`https://image.tmdb.org/t/p/w500${film.poster}`} alt="" style={{ width: "100%", display: "block", borderRadius: "12px 12px 0 0" }} />}
@@ -2045,6 +2047,23 @@ function OverviewModal({ film, onClose }) {
           <p style={{ color: C.muted, fontSize: 14, lineHeight: 1.6, marginTop: 12 }}>{overview}</p>
         ) : (
           <p style={{ color: C.faint, fontSize: 13, marginTop: 12 }}>Loading synopsis…</p>
+        )}
+        {topCast.length > 0 && (
+          <div style={{ marginTop: 16, borderTop: `1px solid ${C.edge}`, paddingTop: 14 }}>
+            <div style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, marginBottom: 8 }}>
+              Starring
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {topCast.map(c => (
+                <span key={c.id || c.name} style={{
+                  fontSize: 12, color: C.text, background: C.panelHi, border: `1px solid ${C.edge}`,
+                  borderRadius: 999, padding: "4px 11px",
+                }}>
+                  {c.name}{c.character ? <span style={{ color: C.faint }}> · {c.character}</span> : null}
+                </span>
+              ))}
+            </div>
+          </div>
         )}
       </div>
     </TheaterModalShell>
@@ -2688,6 +2707,12 @@ function Picker({ state, setState, user }) {
                       <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 14, color: C.amber }}>{Number(cr.avg_rating).toFixed(1)}</span>
                       Nerdmunity ({cr.rating_count})
                     </span>
+                  )}
+                  {display.tmdbId && (
+                    <button className="nol-theater-opt" style={{ borderRadius: 999, padding: "5px 14px" }}
+                      onClick={() => { setTheaterFilm(display); setTheaterMode("overview"); }}>
+                      Cast & full overview
+                    </button>
                   )}
                 </div>
               );
