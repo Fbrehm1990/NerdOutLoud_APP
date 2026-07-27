@@ -1193,7 +1193,8 @@ function TopBar({ goHome, openMenu, nightActive, unreadCount, onOpenNotifs }) {
         display: "flex", alignItems: "center", gap: 8, minWidth: 0,
       }}>
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          <span style={{ color: C.amber }}>REEL</span>munity
+          <span style={{ color: C.amber }}>REEL</span>
+          <span style={{ fontFamily: "'Karla', sans-serif", fontSize: "0.62em", fontWeight: 700, letterSpacing: "0.02em" }}>munity</span>
         </span>
         {nightActive && (
           <span style={{ color: C.green, fontSize: 14, flexShrink: 0, display: "flex", alignItems: "center", gap: 4 }}>
@@ -1362,7 +1363,8 @@ function Marquee() {
           letterSpacing: "0.1em", margin: 0, lineHeight: 1, color: C.text,
           textShadow: `0 0 30px rgba(255,182,39,0.25)`,
         }}>
-          <span style={{ color: C.amber, textShadow: `0 0 24px rgba(255,182,39,0.6)` }}>REEL</span>munity
+          <span style={{ color: C.amber, textShadow: `0 0 24px rgba(255,182,39,0.6)` }}>REEL</span>
+          <span style={{ fontFamily: "'Karla', sans-serif", fontSize: "0.6em", fontWeight: 700, letterSpacing: "0.02em", textShadow: "none" }}>munity</span>
         </h1>
         <p style={{ margin: "8px 0 0", color: C.muted, fontSize: 11, letterSpacing: "0.25em", textTransform: "uppercase", textAlign: "center", whiteSpace: "nowrap" }}>
           Stop scrolling · Start watching
