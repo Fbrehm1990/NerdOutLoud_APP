@@ -1,4 +1,4 @@
-# NerdOutLoud — Production Deploy Guide
+# REELmunity — Production Deploy Guide
 
 This is a real Vite + React production build — React, ReactDOM, and Supabase
 are bundled locally (no CDN dependency), Babel is gone entirely (JSX is
@@ -39,7 +39,7 @@ and run `netlify dev` instead.
 ```
 git init
 git add .
-git commit -m "NerdOutLoud production build"
+git commit -m "REELmunity production build"
 ```
 Create a new repository on github.com, then follow GitHub's instructions to
 push (`git remote add origin ...`, `git push -u origin main`).
@@ -128,3 +128,22 @@ here. After deploying, please run through: spin a movie → commit → rate it �
 check it lands correctly on Nerdmunity and your Library. If anything looks
 off, tell me exactly what you see and I'll debug it with you the same way
 we've done all along.
+
+## Environment variables (optional)
+
+Supabase config and the admin email can be set via environment variables
+instead of being hardcoded — see `.env.example` for the full list and what
+each one does. All three are optional; the app falls back to the current
+live project's values if left unset, so this is a safe, non-breaking option,
+not a required migration step.
+
+To use a different Supabase project (e.g., a staging environment):
+1. Copy `.env.example` to `.env` for local development (already gitignored).
+2. For production, set the same variable names in Netlify's dashboard:
+   **Site configuration → Environment variables**.
+3. Trigger a fresh deploy — Vite reads these at *build* time, so a change
+   here requires a new build to take effect, same as any other env var.
+
+`TMDB_KEY` and `OMDB_KEY` are unaffected by this — they were already
+server-only, set directly in Netlify without a `VITE_` prefix, and read only
+by the Netlify Functions, never by the browser-side app.
