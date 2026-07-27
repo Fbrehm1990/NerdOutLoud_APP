@@ -147,3 +147,20 @@ To use a different Supabase project (e.g., a staging environment):
 `TMDB_KEY` and `OMDB_KEY` are unaffected by this — they were already
 server-only, set directly in Netlify without a `VITE_` prefix, and read only
 by the Netlify Functions, never by the browser-side app.
+
+## Production error monitoring (optional)
+
+The app reports uncaught errors to Sentry if configured — see `.env.example`
+for the `VITE_SENTRY_DSN` variable. Completely optional; unset, the app
+behaves exactly as before, with zero added bundle size (verified — Sentry's
+code gets fully removed at build time when no DSN is present).
+
+To turn it on:
+1. Create a free account at sentry.io — this is a manual step only you can do.
+2. Create a new project, choose "React" as the platform.
+3. Copy the DSN it gives you.
+4. Set `VITE_SENTRY_DSN` in Netlify's Site configuration → Environment variables.
+5. Trigger a fresh deploy (same as any other env var — Vite reads it at build time).
+
+Once live, any error caught by the app's Error Boundary (`src/components/ErrorBoundary.jsx`)
+gets reported automatically, along with the component stack that crashed.
