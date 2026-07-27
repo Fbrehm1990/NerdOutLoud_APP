@@ -350,7 +350,7 @@ const tmdb = {
     return (j.results || []).slice(0, 8);
   },
   async filmDetails(id) {
-    const r = await fetch(tmdbProxy(`/movie/${id}`, { append_to_response: "credits,watch/providers" }));
+    const r = await fetch(tmdbProxy(`/movie/${id}`, { append_to_response: "credits,watch/providers,release_dates" }));
     if (!r.ok) throw new Error("details failed");
     return r.json();
   },
@@ -462,6 +462,32 @@ const tmdb = {
         vids.find(v => v.site === "YouTube");
       return official ? official.key : null;
     } catch { return null; }
+  },
+  // For "Coming Soon" titles: which streaming service it'll land on, and when —
+  // TMDB's release_dates carry a "type" per country (4 = Digital/streaming release),
+  // separate from the theatrical date already shown elsewhere. Cached per film per day.
+  async streamingInfo(id) {
+    const cacheKey = "nol-tmdb-streaminfo-" + id;
+    try {
+      const cached = await store.get(cacheKey);
+      if (cached) {
+        const { day, info } = JSON.parse(cached);
+        if (day === new Date().toDateString()) return info;
+      }
+    } catch { /* refetch */ }
+    let info = null;
+    try {
+      const d = await tmdb.filmDetails(id);
+      const svc = tmdbSvc(d["watch/providers"]);
+      const usEntry = ((d.release_dates && d.release_dates.results) || []).find(r => r.iso_3166_1 === "US");
+      const digitalEntries = usEntry ? usEntry.release_dates.filter(rd => rd.type === 4) : [];
+      const digitalDate = digitalEntries.length
+        ? digitalEntries.map(rd => rd.release_date).sort()[0].slice(0, 10)
+        : null;
+      if (svc !== "Other" || digitalDate) info = { svc: svc === "Other" ? null : svc, date: digitalDate };
+    } catch { /* leave null, badges just won't show for this one */ }
+    try { await store.set(cacheKey, JSON.stringify({ day: new Date().toDateString(), info })); } catch { /* ignore */ }
+    return info;
   },
   // Pulls a large, currently-streaming slice for one service via TMDB's discover
   // endpoint (filtered by watch provider), cached per-service for the day.
@@ -1066,7 +1092,7 @@ function TopBar({ goHome, openMenu, nightActive, unreadCount, onOpenNotifs }) {
   );
 }
 
-function NotifPanel({ open, close, notifications, onClickNotif, onDismiss, onMarkAllRead }) {
+function NotifPanel({ open, close, notifications, onClickNotif, onDismiss, onMarkAllRead, onClearAll }) {
   if (!open) return null;
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 40 }}>
@@ -1083,9 +1109,14 @@ function NotifPanel({ open, close, notifications, onClickNotif, onDismiss, onMar
           position: "sticky", top: 0,
         }}>
           <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 18, letterSpacing: "0.12em", color: C.amber }}>Notifications</span>
-          {notifications.some(n => !n.read) && (
-            <span className="nol-danger-link" style={{ fontSize: 12 }} onClick={onMarkAllRead}>Mark all read</span>
-          )}
+          <div style={{ display: "flex", gap: 12 }}>
+            {notifications.some(n => !n.read) && (
+              <span className="nol-danger-link" style={{ fontSize: 12 }} onClick={onMarkAllRead}>Mark all read</span>
+            )}
+            {notifications.length > 0 && (
+              <span className="nol-danger-link" style={{ fontSize: 12 }} onClick={onClearAll}>Clear all</span>
+            )}
+          </div>
         </div>
         {notifications.length === 0 ? (
           <p style={{ color: C.muted, fontSize: 13, padding: "20px 18px", margin: 0, textAlign: "center" }}>
@@ -2187,12 +2218,41 @@ function ReleaseDateModal({ film, onClose }) {
 }
 
 // ---------------- In Theaters: everything playing now and coming soon ----------------
-function TheaterPosterGrid({ items, badge, badgeColor, onOverview, onTrailer, onThird, thirdLabel }) {
+function TheaterPosterGrid({ items, badge, badgeColor, onOverview, onTrailer, onThird, thirdLabel, showStreamingInfo }) {
   const [revealedId, setRevealedId] = useState(null);
+  const [streamInfo, setStreamInfo] = useState({});
+
+  useEffect(() => {
+    if (!showStreamingInfo || !items || !items.length) return;
+    let on = true;
+    const ids = items.map(t => t.tmdbId).filter(id => !(id in streamInfo));
+    const BATCH = 6; // fetch a handful at a time rather than firing everything at once
+    (async () => {
+      for (let i = 0; i < ids.length; i += BATCH) {
+        if (!on) return;
+        const batch = ids.slice(i, i + BATCH);
+        const results = await Promise.all(batch.map(id => tmdb.streamingInfo(id).catch(() => null)));
+        if (!on) return;
+        setStreamInfo(prev => {
+          const next = { ...prev };
+          batch.forEach((id, j) => { next[id] = results[j]; });
+          return next;
+        });
+      }
+    })();
+    return () => { on = false; };
+  }, [showStreamingInfo, items.map(t => t.tmdbId).join(",")]);
+
+  const formatDate = (iso) => {
+    if (!iso) return null;
+    return new Date(iso + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  };
+
   return (
     <div className="nol-theater-grid">
       {items.map(t => {
         const revealed = revealedId === t.tmdbId;
+        const info = streamInfo[t.tmdbId];
         return (
           <div key={t.tmdbId} className="nol-trend-card nol-theater-card"
             onClick={() => setRevealedId(revealed ? null : t.tmdbId)}
@@ -2222,6 +2282,20 @@ function TheaterPosterGrid({ items, badge, badgeColor, onOverview, onTrailer, on
             </div>
             <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginTop: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.n}</div>
             <div style={{ fontSize: 11, color: C.faint }}>{t.y}</div>
+            {info && info.svc && (
+              <div style={{
+                marginTop: 4, fontSize: 9, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase",
+                color: C.green, background: "rgba(67,192,136,0.12)", border: `1px solid ${C.green}`,
+                borderRadius: 4, padding: "2px 6px", display: "inline-block",
+              }}>Streaming on {info.svc}</div>
+            )}
+            {info && info.date && (
+              <div style={{
+                marginTop: 4, fontSize: 9, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase",
+                color: C.amberSoft, background: "rgba(255,182,39,0.1)", border: `1px solid ${C.edge}`,
+                borderRadius: 4, padding: "2px 6px", display: "inline-block",
+              }}>Streams {formatDate(info.date)}</div>
+            )}
           </div>
         );
       })}
@@ -2273,7 +2347,8 @@ function TheatersPage() {
             onOverview={openOverview} onTrailer={openTrailer} onThird={openTickets} thirdLabel="Buy Tickets" />
         ) : (
           <TheaterPosterGrid items={list} badge="COMING SOON" badgeColor={C.green}
-            onOverview={openOverview} onTrailer={openTrailer} onThird={openRelease} thirdLabel="Release Date" />
+            onOverview={openOverview} onTrailer={openTrailer} onThird={openRelease} thirdLabel="Release Date"
+            showStreamingInfo />
         )
       )}
 
@@ -4094,6 +4169,7 @@ export default function REELmunity() {
   }, [state == null]);
 
   const markAllRead = () => setState(s => s ? { ...s, notifications: (s.notifications || []).map(n => ({ ...n, read: true })) } : s);
+  const clearAllNotifs = () => setState(s => s ? { ...s, notifications: [] } : s);
   const dismissNotif = (n) => setState(s => s ? { ...s, notifications: (s.notifications || []).filter(x => x.id !== n.id) } : s);
   const onClickNotif = (n) => {
     setState(s => s ? { ...s, notifications: (s.notifications || []).map(x => x.id === n.id ? { ...x, read: true } : x) } : s);
@@ -4125,7 +4201,7 @@ export default function REELmunity() {
         unreadCount={notifications.filter(n => !n.read).length} onOpenNotifs={cloud.enabled() ? () => setNotifOpen(true) : null} />
       <NotifPanel open={notifOpen} close={() => setNotifOpen(false)} notifications={notifications}
         onClickNotif={onClickNotif} onDismiss={dismissNotif}
-        onMarkAllRead={markAllRead} />
+        onMarkAllRead={markAllRead} onClearAll={clearAllNotifs} />
       <Menu open={menuOpen} close={() => setMenuOpen(false)} view={view} nightActive={!!state.night} state={state} user={user}
         go={(k) => {
           if (k === "account-signup") { setAccountMode("signup"); setView("account"); }
