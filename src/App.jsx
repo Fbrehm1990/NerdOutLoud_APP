@@ -1210,7 +1210,7 @@ function Marquee() {
           margin: "10px 0 0", color: C.text, fontSize: 15, fontWeight: 700,
           textAlign: "center", maxWidth: 400, marginLeft: "auto", marginRight: "auto", lineHeight: 1.3,
         }}>
-          The fastest way to decide what to watch tonight.
+          Stuck scrolling? Let us pick for you, fast and easy!
         </p>
         <div style={{ display: "flex", justifyContent: "center", gap: 10, marginTop: 12 }}>
           {[...Array(11)].map((_, i) => (
