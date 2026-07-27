@@ -1161,7 +1161,7 @@ function TopBar({ goHome, openMenu, nightActive, unreadCount, onOpenNotifs }) {
         display: "flex", alignItems: "center", gap: 8, minWidth: 0,
       }}>
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          <span style={{ color: C.amber }}>REEL</span>MUNITY
+          <span style={{ color: C.amber }}>REEL</span>munity
         </span>
         {nightActive && (
           <span style={{ color: C.green, fontSize: 14, flexShrink: 0, display: "flex", alignItems: "center", gap: 4 }}>
@@ -1330,7 +1330,7 @@ function Marquee() {
           letterSpacing: "0.1em", margin: 0, lineHeight: 1, color: C.text,
           textShadow: `0 0 30px rgba(255,182,39,0.25)`,
         }}>
-          <span style={{ color: C.amber, textShadow: `0 0 24px rgba(255,182,39,0.6)` }}>REEL</span>MUNITY
+          <span style={{ color: C.amber, textShadow: `0 0 24px rgba(255,182,39,0.6)` }}>REEL</span>munity
         </h1>
         <p style={{ margin: "8px 0 0", color: C.muted, fontSize: 11, letterSpacing: "0.25em", textTransform: "uppercase", textAlign: "center", whiteSpace: "nowrap" }}>
           Stop scrolling · Start watching
@@ -4247,6 +4247,7 @@ export default function REELmunity() {
     syncedFor.current = user.id;
     const localNotifs = state.notifications || [];
     const localFilms = state.films || [];
+    const localSeen = state.notifSeen || { trending: [], svc: {} };
     (async () => {
       const remote = await cloud.loadState(user.id);
       const finalHandle = remote && remote.handle ? remote.handle : state.handle;
@@ -4270,7 +4271,21 @@ export default function REELmunity() {
           return rf;
         });
         const onlyLocalFilms = localFilms.filter(f => !remoteFilmIds.has(f.id));
-        setState({ ...SEED, ...remote, notifications: mergedNotifs, films: [...mergedFilms, ...onlyLocalFilms] });
+        // Same protection for the "already told you about this" tracking — this is
+        // the exact data that stops trending/service digests from repeating, so if
+        // IT gets reverted to a stale copy, the app starts re-announcing things it
+        // already showed you. Union the seen-ids instead of trusting either side alone.
+        const remoteSeen = remote.notifSeen || { trending: [], svc: {} };
+        const mergedTrendingSeen = Array.from(new Set([...(remoteSeen.trending || []), ...(localSeen.trending || [])])).slice(-200);
+        const mergedSvcSeen = { ...(remoteSeen.svc || {}) };
+        Object.keys(localSeen.svc || {}).forEach(svc => {
+          const combined = new Set([...(mergedSvcSeen[svc] || []), ...(localSeen.svc[svc] || [])]);
+          mergedSvcSeen[svc] = Array.from(combined).slice(0, 300);
+        });
+        setState({
+          ...SEED, ...remote, notifications: mergedNotifs, films: [...mergedFilms, ...onlyLocalFilms],
+          notifSeen: { trending: mergedTrendingSeen, svc: mergedSvcSeen },
+        });
       } else {
         cloud.saveState(user.id, state);
       }
