@@ -440,7 +440,7 @@ const tmdb = {
   },
   // Same pattern, for films that haven't opened in theaters yet.
   async upcomingList() {
-    const cacheKey = "nol-tmdb-upcoming-v2";
+    const cacheKey = "nol-tmdb-upcoming-v3";
     try {
       const cached = await store.get(cacheKey);
       if (cached) {
@@ -461,7 +461,9 @@ const tmdb = {
     const items = all.map(m => ({
       n: m.title || "Untitled", y: m.release_date ? Number(m.release_date.slice(0, 4)) : new Date().getFullYear(),
       poster: m.poster_path || null, tmdbId: m.id, syn: (m.overview || "").slice(0, 200),
+      releaseDate: m.release_date || null,
     }));
+    items.sort((a, b) => (a.releaseDate || "9999-99-99").localeCompare(b.releaseDate || "9999-99-99"));
     if (items.length) {
       try { await store.set(cacheKey, JSON.stringify({ day: new Date().toDateString(), items })); } catch { /* ignore */ }
     }
@@ -473,7 +475,7 @@ const tmdb = {
   // their own query: discover films whose *digital* release date (type 4) is still
   // ahead of today, which is a real, separate calendar TMDB tracks.
   async upcomingStreamList() {
-    const cacheKey = "nol-tmdb-upcoming-stream-v1";
+    const cacheKey = "nol-tmdb-upcoming-stream-v2";
     try {
       const cached = await store.get(cacheKey);
       if (cached) {
@@ -499,7 +501,9 @@ const tmdb = {
     const items = all.map(m => ({
       n: m.title || "Untitled", y: m.release_date ? Number(m.release_date.slice(0, 4)) : new Date().getFullYear(),
       poster: m.poster_path || null, tmdbId: m.id, syn: (m.overview || "").slice(0, 200),
+      releaseDate: m.release_date || null,
     }));
+    items.sort((a, b) => (a.releaseDate || "9999-99-99").localeCompare(b.releaseDate || "9999-99-99"));
     if (items.length) {
       try { await store.set(cacheKey, JSON.stringify({ day: new Date().toDateString(), items })); } catch { /* ignore */ }
     }
@@ -2417,9 +2421,15 @@ function TheatersPage() {
       {tab === "coming" && upcomingTheatrical && upcomingStream && (
         <>
           {upcomingTheatrical.length > 0 && (
-            <div style={{ marginBottom: 32 }}>
-              <div style={{ fontSize: 13, letterSpacing: "0.15em", textTransform: "uppercase", color: C.amber, marginBottom: 14, textAlign: "center" }}>
-                Coming soon to a theatre near you
+            <div style={{ marginBottom: 36 }}>
+              <div style={{ textAlign: "center", marginBottom: 18 }}>
+                <div style={{
+                  fontFamily: "'Bebas Neue', sans-serif", fontSize: "clamp(22px, 5vw, 30px)", letterSpacing: "0.06em",
+                  color: C.amber, textShadow: "0 0 22px rgba(255,182,39,0.4)",
+                }}>
+                  🎬 Coming Soon to a Theatre Near You
+                </div>
+                <div style={{ width: 70, height: 3, background: C.amber, borderRadius: 2, margin: "8px auto 0", boxShadow: "0 0 10px rgba(255,182,39,0.6)" }} />
               </div>
               <TheaterPosterGrid items={upcomingTheatrical} badge="COMING SOON" badgeColor={C.green}
                 onOverview={openOverview} onTrailer={openTrailer} onThird={openRelease} thirdLabel="Release Date" />
@@ -2427,8 +2437,14 @@ function TheatersPage() {
           )}
           {upcomingStream.length > 0 && (
             <div>
-              <div style={{ fontSize: 13, letterSpacing: "0.15em", textTransform: "uppercase", color: C.green, marginBottom: 14, textAlign: "center" }}>
-                Coming soon to stream
+              <div style={{ textAlign: "center", marginBottom: 18 }}>
+                <div style={{
+                  fontFamily: "'Bebas Neue', sans-serif", fontSize: "clamp(22px, 5vw, 30px)", letterSpacing: "0.06em",
+                  color: C.green, textShadow: "0 0 22px rgba(67,192,136,0.4)",
+                }}>
+                  📺 Coming Soon to Stream
+                </div>
+                <div style={{ width: 70, height: 3, background: C.green, borderRadius: 2, margin: "8px auto 0", boxShadow: "0 0 10px rgba(67,192,136,0.6)" }} />
               </div>
               <TheaterPosterGrid items={upcomingStream} badge="COMING SOON" badgeColor={C.green} streamInfo={streamSvcInfo}
                 onOverview={openOverview} onTrailer={openTrailer} onThird={openRelease} thirdLabel="Release Date" />
