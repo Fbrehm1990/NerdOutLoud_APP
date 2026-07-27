@@ -1083,28 +1083,28 @@ function NotifPanel({ open, close, notifications, onClickNotif, onDismiss, onMar
           position: "sticky", top: 0,
         }}>
           <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 18, letterSpacing: "0.12em", color: C.amber }}>Notifications</span>
-          {notifications.length > 0 && (
-            <span className="nol-danger-link" style={{ fontSize: 12 }} onClick={onMarkAllRead}>Clear all</span>
+          {notifications.some(n => !n.read) && (
+            <span className="nol-danger-link" style={{ fontSize: 12 }} onClick={onMarkAllRead}>Mark all read</span>
           )}
         </div>
         {notifications.length === 0 ? (
           <p style={{ color: C.muted, fontSize: 13, padding: "20px 18px", margin: 0, textAlign: "center" }}>
-            You're all caught up — new comments, replies, and movie drops will show up here.
+            Nothing yet — new comments, replies, and movie drops will show up here.
           </p>
         ) : (
           notifications.map((n, i) => (
             <div key={n.id} className="nol-row" style={{
               display: "flex", alignItems: "flex-start", gap: 8, padding: "12px 18px",
               borderBottom: i < notifications.length - 1 ? `1px solid ${C.edge}` : "none",
-              background: "rgba(255,182,39,0.05)",
+              background: n.read ? "transparent" : "rgba(255,182,39,0.05)",
             }}>
               <div onClick={() => onClickNotif(n)} style={{ flex: 1, minWidth: 0, cursor: "pointer" }}>
                 <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
-                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: C.amber, flexShrink: 0 }} />
-                  <span style={{ fontSize: 13, fontWeight: 700, color: C.text, lineHeight: 1.4 }}>{n.title}</span>
+                  {!n.read && <span style={{ width: 6, height: 6, borderRadius: "50%", background: C.amber, flexShrink: 0 }} />}
+                  <span style={{ fontSize: 13, fontWeight: 700, color: n.read ? C.muted : C.text, lineHeight: 1.4 }}>{n.title}</span>
                 </div>
-                {n.sub && <div style={{ color: C.muted, fontSize: 12.5, marginTop: 3, marginLeft: 14, lineHeight: 1.5 }}>{n.sub}</div>}
-                <div style={{ color: C.faint, fontSize: 11, marginTop: 4, marginLeft: 14 }}>
+                {n.sub && <div style={{ color: C.faint, fontSize: 12.5, marginTop: 3, marginLeft: n.read ? 0 : 14, lineHeight: 1.5 }}>{n.sub}</div>}
+                <div style={{ color: C.faint, fontSize: 11, marginTop: 4, marginLeft: n.read ? 0 : 14 }}>
                   {new Date(n.ts).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
                 </div>
               </div>
@@ -3942,11 +3942,22 @@ export default function NerdOutLoud() {
   useEffect(() => {
     if (!user || !state || syncedFor.current === user.id) return;
     syncedFor.current = user.id;
+    const localNotifs = state.notifications || [];
     (async () => {
       const remote = await cloud.loadState(user.id);
       const finalHandle = remote && remote.handle ? remote.handle : state.handle;
-      if (remote) setState({ ...SEED, ...remote });
-      else cloud.saveState(user.id, state);
+      if (remote) {
+        // Never let the cloud copy silently drop a notification that showed up locally
+        // but hasn't finished syncing up yet — merge instead of blindly overwriting.
+        const remoteNotifs = remote.notifications || [];
+        const remoteIds = new Set(remoteNotifs.map(n => n.id));
+        const mergedNotifs = [...remoteNotifs, ...localNotifs.filter(n => !remoteIds.has(n.id))]
+          .sort((a, b) => b.ts - a.ts)
+          .slice(0, 30);
+        setState({ ...SEED, ...remote, notifications: mergedNotifs });
+      } else {
+        cloud.saveState(user.id, state);
+      }
       if (finalHandle) cloud.upsertMember(user.id, finalHandle); // keeps the welcome spotlight in sync
     })();
   }, [user, state == null]);
@@ -4069,9 +4080,10 @@ export default function NerdOutLoud() {
     return () => { cancelled = true; };
   }, [state == null]);
 
-  const markAllRead = () => setState(s => s ? { ...s, notifications: [] } : s);
+  const markAllRead = () => setState(s => s ? { ...s, notifications: (s.notifications || []).map(n => ({ ...n, read: true })) } : s);
+  const dismissNotif = (n) => setState(s => s ? { ...s, notifications: (s.notifications || []).filter(x => x.id !== n.id) } : s);
   const onClickNotif = (n) => {
-    setState(s => s ? { ...s, notifications: (s.notifications || []).filter(x => x.id !== n.id) } : s);
+    setState(s => s ? { ...s, notifications: (s.notifications || []).map(x => x.id === n.id ? { ...x, read: true } : x) } : s);
     setNotifOpen(false);
     if (n.filmSlug) {
       const f = state.films.find(f2 => slugify(f2.n) === n.filmSlug);
@@ -4098,9 +4110,9 @@ export default function NerdOutLoud() {
     <div className="nol-root" style={{ paddingBottom: 30 }}>
       <style>{GLOBAL_CSS}</style>
       <TopBar goHome={() => setView("home")} openMenu={() => setMenuOpen(true)} nightActive={!!state.night}
-        unreadCount={notifications.length} onOpenNotifs={cloud.enabled() ? () => setNotifOpen(true) : null} />
+        unreadCount={notifications.filter(n => !n.read).length} onOpenNotifs={cloud.enabled() ? () => setNotifOpen(true) : null} />
       <NotifPanel open={notifOpen} close={() => setNotifOpen(false)} notifications={notifications}
-        onClickNotif={onClickNotif} onDismiss={(n) => setState(s => s ? { ...s, notifications: (s.notifications || []).filter(x => x.id !== n.id) } : s)}
+        onClickNotif={onClickNotif} onDismiss={dismissNotif}
         onMarkAllRead={markAllRead} />
       <Menu open={menuOpen} close={() => setMenuOpen(false)} view={view} nightActive={!!state.night} state={state} user={user}
         go={(k) => {
