@@ -440,7 +440,7 @@ const tmdb = {
   },
   // Same pattern, for films that haven't opened in theaters yet.
   async upcomingList() {
-    const cacheKey = "nol-tmdb-upcoming-v4";
+    const cacheKey = "nol-tmdb-upcoming-v5";
     try {
       const cached = await store.get(cacheKey);
       if (cached) {
@@ -448,37 +448,55 @@ const tmdb = {
         if (day === new Date().toDateString()) return items;
       }
     } catch { /* refetch */ }
-    // /movie/upcoming includes titles for loose reasons (re-releases, anniversary
-    // screenings) while still reporting each film's ORIGINAL release date on the
-    // object — that's how decades-old classics like a 1971 film were sneaking in
-    // and sorting to the very top. Querying discover with an explicit theatrical
-    // release-type + date window (same reliable approach as the streaming list)
-    // only returns films with a genuinely upcoming theatrical date.
-    const today = new Date().toISOString().slice(0, 10);
-    const in90 = new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10);
-    let all = [];
+    // Two earlier approaches both proved unreliable: /movie/upcoming reports each
+    // film's ORIGINAL release date even when included for an unrelated reason (a
+    // re-release, an anniversary screening), and combining discover's date filter
+    // with with_release_type didn't actually restrict the match the way it's
+    // documented to. The only trustworthy way to know a film has a real upcoming
+    // US theatrical date is to check its own release_dates entries directly — so
+    // that's what this does: gather candidates, then verify every one individually.
+    let candidates = [];
     try {
       for (let page = 1; page <= 5; page++) {
-        const r = await fetch(tmdbProxy("/discover/movie", {
-          region: "US", with_release_type: "2|3", "release_date.gte": today, "release_date.lte": in90,
-          sort_by: "primary_release_date.asc", include_adult: "false", page: String(page),
-        }));
+        const r = await fetch(tmdbProxy("/movie/upcoming", { region: "US", page: String(page) }));
         if (!r.ok) break;
         const j = await r.json();
-        all = all.concat(j.results || []);
+        candidates = candidates.concat(j.results || []);
         if (page >= (j.total_pages || 1)) break;
       }
     } catch { /* use whatever we got */ }
-    const items = all.map(m => ({
-      n: m.title || "Untitled", y: m.release_date ? Number(m.release_date.slice(0, 4)) : new Date().getFullYear(),
-      poster: m.poster_path || null, tmdbId: m.id, syn: (m.overview || "").slice(0, 200),
-      releaseDate: m.release_date || null,
-    }));
-    items.sort((a, b) => (a.releaseDate || "9999-99-99").localeCompare(b.releaseDate || "9999-99-99"));
-    if (items.length) {
-      try { await store.set(cacheKey, JSON.stringify({ day: new Date().toDateString(), items })); } catch { /* ignore */ }
+
+    const today = new Date().toISOString().slice(0, 10);
+    const cutoff = new Date(Date.now() + 180 * 86400000).toISOString().slice(0, 10);
+    const verified = [];
+    const BATCH = 6;
+    for (let i = 0; i < candidates.length; i += BATCH) {
+      const batch = candidates.slice(i, i + BATCH);
+      const results = await Promise.all(batch.map(async (m) => {
+        try {
+          const d = await tmdb.filmDetails(m.id);
+          const usEntry = ((d.release_dates && d.release_dates.results) || []).find(r => r.iso_3166_1 === "US");
+          const theatricalDates = usEntry
+            ? usEntry.release_dates
+                .filter(rd => (rd.type === 2 || rd.type === 3) && rd.release_date)
+                .map(rd => rd.release_date.slice(0, 10))
+                .filter(dt => dt >= today && dt <= cutoff)
+            : [];
+          if (!theatricalDates.length) return null;
+          const soonest = theatricalDates.sort()[0];
+          return {
+            n: m.title || "Untitled", y: Number(soonest.slice(0, 4)), poster: m.poster_path || null,
+            tmdbId: m.id, syn: (m.overview || "").slice(0, 200), releaseDate: soonest,
+          };
+        } catch { return null; }
+      }));
+      results.forEach(r => { if (r) verified.push(r); });
     }
-    return items;
+    verified.sort((a, b) => a.releaseDate.localeCompare(b.releaseDate));
+    if (verified.length) {
+      try { await store.set(cacheKey, JSON.stringify({ day: new Date().toDateString(), items: verified })); } catch { /* ignore */ }
+    }
+    return verified;
   },
   // TMDB's /movie/upcoming is built entirely around theatrical release calendars —
   // everything in it already has a theatrical date by definition, so there's nothing
