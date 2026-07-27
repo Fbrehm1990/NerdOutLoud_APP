@@ -236,6 +236,37 @@ const cloud = (() => {
         return { ...counts, total: (data || []).length };
       } catch { return null; }
     },
+    // A single flexible events table instead of a new dedicated table per metric —
+    // logs spins, commits, completed ratings, and In Theaters button engagement,
+    // and makes adding a future metric a one-line change instead of a new migration.
+    async logEvent(eventType, meta) {
+      const c = ready(); if (!c) return;
+      try { await c.from("nol_events").insert({ event_type: eventType, meta: meta || {} }); } catch { /* ignore */ }
+    },
+    async getEventStats() {
+      const c = ready(); if (!c) return null;
+      try {
+        const { data, error } = await c.from("nol_events").select("event_type,meta").limit(20000);
+        if (error) return null;
+        const rows = data || [];
+        const spins = rows.filter(r => r.event_type === "spin");
+        const commits = rows.filter(r => r.event_type === "commit");
+        const ratings = rows.filter(r => r.event_type === "rating_submitted");
+        const theaterActions = rows.filter(r => r.event_type === "theater_action");
+        const bySource = (list) => {
+          const out = { taste: 0, trending: 0, watchlist: 0, rewatch: 0 };
+          list.forEach(r => { const s = r.meta && r.meta.source; if (s in out) out[s]++; });
+          return out;
+        };
+        const byAction = { overview: 0, trailer: 0, tickets: 0, release: 0 };
+        theaterActions.forEach(r => { const a = r.meta && r.meta.action; if (a in byAction) byAction[a]++; });
+        return {
+          spinCount: spins.length, commitCount: commits.length, ratingCount: ratings.length,
+          spinsBySource: bySource(spins), commitsBySource: bySource(commits),
+          theaterActionCount: theaterActions.length, byAction,
+        };
+      } catch { return null; }
+    },
     async getPageviewCount() {
       const c = ready(); if (!c) return null;
       try {
@@ -1915,6 +1946,7 @@ function NightFlow({ state, setState, user, gated, goSignup }) {
 
   const settleRating = () => {
     const trimmed = note.trim();
+    cloud.logEvent("rating_submitted", {});
     postToLobby(film, {
       u: (state.handle || "Anonymous patron").slice(0, 24),
       t: trimmed.slice(0, 500),
@@ -2467,10 +2499,10 @@ function TheatersPage() {
     return () => { on = false; };
   }, [upcomingStream && upcomingStream.map(t => t.tmdbId).join(",")]);
 
-  const openOverview = (t) => { setTheaterFilm(t); setTheaterMode("overview"); };
-  const openTrailer = (t) => { setTheaterFilm(t); setTheaterMode("trailer"); };
-  const openTickets = (t) => { setTheaterFilm(t); setTheaterMode("tickets"); };
-  const openRelease = (t) => { setTheaterFilm(t); setTheaterMode("release"); };
+  const openOverview = (t) => { cloud.logEvent("theater_action", { action: "overview" }); setTheaterFilm(t); setTheaterMode("overview"); };
+  const openTrailer = (t) => { cloud.logEvent("theater_action", { action: "trailer" }); setTheaterFilm(t); setTheaterMode("trailer"); };
+  const openTickets = (t) => { cloud.logEvent("theater_action", { action: "tickets" }); setTheaterFilm(t); setTheaterMode("tickets"); };
+  const openRelease = (t) => { cloud.logEvent("theater_action", { action: "release" }); setTheaterFilm(t); setTheaterMode("release"); };
 
   const comingCount = (upcomingTheatrical && upcomingStream) ? upcomingTheatrical.length + upcomingStream.length : null;
   const list = tab === "now" ? nowPlaying : (upcomingTheatrical && upcomingStream ? [...upcomingTheatrical, ...upcomingStream] : null);
@@ -2843,6 +2875,7 @@ function Picker({ state, setState, user }) {
   const spin = () => {
     const p0 = buildPool();
     if (p0.length === 0) return;
+    cloud.logEvent("spin", { source });
     setPhase("spinning");
     setWhy("");
     let ticks = 0;
@@ -2907,6 +2940,7 @@ function Picker({ state, setState, user }) {
     if (!display.__manual && !services.includes(display.svc)) return;
     const vetoesUsed = 2 - (state.vetoesLeft != null ? state.vetoesLeft : 2);
     cloud.logVetoUsage(vetoesUsed); // fire-and-forget, doesn't block the actual commit
+    cloud.logEvent("commit", { source });
     let finalDisplay = display;
     // Live discover picks carry placeholder runtime/director — fetch the real thing before locking it in.
     if (display.__live && display.tmdbId) {
@@ -3069,7 +3103,7 @@ function Picker({ state, setState, user }) {
                   )}
                   {display.tmdbId && (
                     <button className="nol-theater-opt" style={{ borderRadius: 999, padding: "5px 14px" }}
-                      onClick={() => { setTheaterFilm(display); setTheaterMode("overview"); }}>
+                      onClick={() => { cloud.logEvent("theater_action", { action: "overview" }); setTheaterFilm(display); setTheaterMode("overview"); }}>
                       Cast & full overview
                     </button>
                   )}
@@ -3143,10 +3177,10 @@ function Picker({ state, setState, user }) {
 
       <div style={{ marginTop: 34, paddingTop: 26, borderTop: `1px solid ${C.edge}` }}>
         <TrendingStrip items={liveTrending || TRENDING} live={!!liveTrending} theaterIds={theaterIds} upcomingIds={upcomingIds}
-          onOverview={(t) => { setTheaterFilm(t); setTheaterMode("overview"); }}
-          onTrailer={(t) => { setTheaterFilm(t); setTheaterMode("trailer"); }}
-          onTickets={(t) => { setTheaterFilm(t); setTheaterMode("tickets"); }}
-          onReleaseDate={(t) => { setTheaterFilm(t); setTheaterMode("release"); }}
+          onOverview={(t) => { cloud.logEvent("theater_action", { action: "overview" }); setTheaterFilm(t); setTheaterMode("overview"); }}
+          onTrailer={(t) => { cloud.logEvent("theater_action", { action: "trailer" }); setTheaterFilm(t); setTheaterMode("trailer"); }}
+          onTickets={(t) => { cloud.logEvent("theater_action", { action: "tickets" }); setTheaterFilm(t); setTheaterMode("tickets"); }}
+          onReleaseDate={(t) => { cloud.logEvent("theater_action", { action: "release" }); setTheaterFilm(t); setTheaterMode("release"); }}
           onPick={(t, rank) => {
             if (phase === "spinning") return;
             setDisplay({ ...t, __manual: true });
@@ -3848,12 +3882,13 @@ function AdminPage() {
   const [stats, setStats] = useState(null);
   const [members, setMembers] = useState(null);
   const [vetoStats, setVetoStats] = useState(null);
+  const [eventStats, setEventStats] = useState(null);
 
   useEffect(() => {
     if (!cloud.enabled()) return;
     let on = true;
     (async () => {
-      const [visits, visits7, visits30, accounts, lobby, chats, recent, vetoes] = await Promise.all([
+      const [visits, visits7, visits30, accounts, lobby, chats, recent, vetoes, events] = await Promise.all([
         cloud.getPageviewCount(),
         cloud.getPageviewsSince(7),
         cloud.getPageviewsSince(30),
@@ -3862,11 +3897,13 @@ function AdminPage() {
         cloud.getChatCount(),
         cloud.recentMembers(8),
         cloud.getVetoStats(),
+        cloud.getEventStats(),
       ]);
       if (!on) return;
       setStats({ visits, visits7, visits30, accounts, lobby, chats });
       setMembers(recent);
       setVetoStats(vetoes);
+      setEventStats(events);
     })();
     return () => { on = false; };
   }, []);
@@ -3925,6 +3962,80 @@ function AdminPage() {
                 A high share of "2 vetoes used" (red) suggests people are hitting the ceiling and
                 might benefit from a 3rd veto. Mostly "0 used" (green) suggests 2 is already generous.
               </p>
+            </Panel>
+          )}
+
+          {eventStats && eventStats.spinCount > 0 && (
+            <Panel title="Spin-to-commit ratio" right={`${eventStats.spinCount} spins tracked`}>
+              <p style={{ color: C.faint, fontSize: 12, margin: "0 0 14px", lineHeight: 1.5 }}>
+                How often a spin actually turns into a commit — a low ratio can mean people are
+                re-spinning past the veto system entirely rather than formally vetoing.
+              </p>
+              <div style={{ display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap" }}>
+                <Stat label="Spins" value={eventStats.spinCount} />
+                <Stat label="Commits" value={eventStats.commitCount} accent={C.amber} />
+                <Stat label="Commit rate" value={`${Math.round((eventStats.commitCount / eventStats.spinCount) * 100)}%`} accent={C.green} />
+              </div>
+            </Panel>
+          )}
+
+          {eventStats && eventStats.commitCount > 0 && (
+            <Panel title="Which picker source gets used">
+              <p style={{ color: C.faint, fontSize: 12, margin: "0 0 14px", lineHeight: 1.5 }}>
+                Based on commits, not just spins — shows what people actually settle on.
+              </p>
+              {[["taste", "Match my taste"], ["trending", "Trending now"], ["watchlist", "My watchlist"], ["rewatch", "Rewatch night"]].map(([key, label]) => {
+                const count = eventStats.commitsBySource[key] || 0;
+                const pct = Math.round((count / eventStats.commitCount) * 100);
+                return (
+                  <div key={key} style={{ marginBottom: 10 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.muted, marginBottom: 4 }}>
+                      <span>{label}</span>
+                      <span>{pct}% ({count})</span>
+                    </div>
+                    <div style={{ height: 8, background: C.bg, borderRadius: 4, overflow: "hidden" }}>
+                      <div style={{ width: `${pct}%`, height: "100%", background: C.amber }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </Panel>
+          )}
+
+          {eventStats && eventStats.commitCount > 0 && (
+            <Panel title="Movie night completion" right={`${eventStats.commitCount} commits tracked`}>
+              <p style={{ color: C.faint, fontSize: 12, margin: "0 0 14px", lineHeight: 1.5 }}>
+                Of everyone who committed to a pick, how many came back and actually finished rating it.
+              </p>
+              <div style={{ display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap" }}>
+                <Stat label="Committed" value={eventStats.commitCount} />
+                <Stat label="Rated after" value={eventStats.ratingCount} accent={C.green} />
+                <Stat label="Completion" value={`${Math.round((eventStats.ratingCount / eventStats.commitCount) * 100)}%`} accent={C.amber} />
+              </div>
+            </Panel>
+          )}
+
+          {eventStats && eventStats.theaterActionCount > 0 && (
+            <Panel title="In Theaters engagement" right={`${eventStats.theaterActionCount} clicks tracked`}>
+              <p style={{ color: C.faint, fontSize: 12, margin: "0 0 14px", lineHeight: 1.5 }}>
+                Which of the three (or four) options people actually reach for.
+              </p>
+              {[["overview", "Overview"], ["trailer", "Trailer"], ["tickets", "Buy Tickets"], ["release", "Release Date"]].map(([key, label]) => {
+                const count = eventStats.byAction[key] || 0;
+                const pct = Math.round((count / eventStats.theaterActionCount) * 100);
+                if (count === 0) return null;
+                return (
+                  <div key={key} style={{ marginBottom: 10 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.muted, marginBottom: 4 }}>
+                      <span>{label}</span>
+                      <span>{pct}% ({count})</span>
+                    </div>
+                    <div style={{ height: 8, background: C.bg, borderRadius: 4, overflow: "hidden" }}>
+                      <div style={{ width: `${pct}%`, height: "100%", background: C.red }} />
+                    </div>
+                  </div>
+                );
+              })}
             </Panel>
           )}
 
