@@ -1004,7 +1004,7 @@ function HowItWorks() {
   const steps = [
     ["🎬", "Spin", "One tap picks your movie from what's actually on your services."],
     ["⭐", "Rate", "Call your rating before you watch, then settle the real score after."],
-    ["💬", "Talk", "Land on Nerdmunity — see what everyone else rated it, and say your piece."],
+    ["💬", "Talk", "Land in The Lobby — see what everyone else rated it, and say your piece."],
   ];
   return (
     <div className="nol-howitworks" style={{ maxWidth: 680, margin: "18px auto 0", padding: "0 16px" }}>
@@ -1037,7 +1037,7 @@ function TopBar({ goHome, openMenu, nightActive, unreadCount, onOpenNotifs }) {
         display: "flex", alignItems: "center", gap: 8, minWidth: 0,
       }}>
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          NERD<span style={{ color: C.amber }}>OUT</span>LOUD
+          <span style={{ color: C.amber }}>REEL</span>MUNITY
         </span>
         {nightActive && (
           <span style={{ color: C.green, fontSize: 14, flexShrink: 0, display: "flex", alignItems: "center", gap: 4 }}>
@@ -1127,7 +1127,7 @@ function Menu({ open, close, go, view, nightActive, state, user }) {
   const items = [
     ["home", "Tonight's pick", nightActive ? "Movie night in progress" : "Spin, call it, watch, rate — all in one"],
     ["theaters", "In Theaters", "Everything playing now and coming soon — overview, trailer, tickets"],
-    ["board", gated ? "Nerdmunity — locked" : "Nerdmunity", gated ? "Create a free account to unlock the community and film lobbies" : "Talk movies with other patrons — rate, review, discuss"],
+    ["board", gated ? "The Lobby — locked" : "The Lobby", gated ? "Create a free account to unlock the community and film discussions" : "Talk movies with other patrons — rate, review, discuss"],
     ["library", gated ? "Library — locked" : "Library", gated ? "Create a free account to unlock your watchlist, ranking, and movie search" : "Your watchlist and your films, ranked by your rating"],
     ...(user
       ? [["account", "Account", user.email || "Signed in — syncing across devices"]]
@@ -1201,7 +1201,7 @@ function Marquee() {
           letterSpacing: "0.1em", margin: 0, lineHeight: 1, color: C.text,
           textShadow: `0 0 30px rgba(255,182,39,0.25)`,
         }}>
-          NERD<span style={{ color: C.amber, textShadow: `0 0 24px rgba(255,182,39,0.6)` }}>OUT</span>LOUD
+          <span style={{ color: C.amber, textShadow: `0 0 24px rgba(255,182,39,0.6)` }}>REEL</span>MUNITY
         </h1>
         <p style={{ margin: "8px 0 0", color: C.muted, fontSize: 11, letterSpacing: "0.25em", textTransform: "uppercase", textAlign: "center", whiteSpace: "nowrap" }}>
           Stop scrolling · Start watching
@@ -1334,7 +1334,7 @@ function Avatar({ name, size }) {
 
 const REACTIONS = ["🔥", "😂", "💯", "😢", "🍿"];
 
-// ---------------- Film lobby: talk about the movie ----------------
+// ---------------- Film screening room: talk about the movie ----------------
 function Lobby({ film, handle, saveHandle, user, goAccount, setFilmPoster, onRate, refreshCommunity }) {
   const [msgs, setMsgs] = useState(null);
   const [text, setText] = useState("");
@@ -1397,7 +1397,7 @@ function Lobby({ film, handle, saveHandle, user, goAccount, setFilmPoster, onRat
 
   const post = async () => {
     if (!text.trim() && cRating === "") return;
-    const patron = user && handle ? handle : (name.trim() || "Anonymous nerd");
+    const patron = user && handle ? handle : (name.trim() || "Anonymous patron");
     const m = {
       id: Date.now() + Math.floor(Math.random() * 1000),
       pid: replyTo ? replyTo.id : null,
@@ -1612,7 +1612,7 @@ function Lobby({ film, handle, saveHandle, user, goAccount, setFilmPoster, onRat
   return (
     <div className="nol-fade" style={{ background: C.bg, border: `1px solid ${C.edge}`, borderRadius: 8, padding: "14px 16px", margin: "4px 0 10px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10, gap: 10, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 11, letterSpacing: "0.25em", textTransform: "uppercase", color: C.amber }}>The lobby</span>
+        <span style={{ fontSize: 11, letterSpacing: "0.25em", textTransform: "uppercase", color: C.amber }}>The Screening Room</span>
         <span style={{ fontSize: 12, color: C.muted }}>
           {avg != null
             ? <>Community score <span style={{ color: C.amber, fontWeight: 700 }}>{avg.toFixed(1)}</span> · {all.length} take{all.length === 1 ? "" : "s"}</>
@@ -1641,10 +1641,10 @@ function Lobby({ film, handle, saveHandle, user, goAccount, setFilmPoster, onRat
         </div>
       )}
 
-      {msgs == null && <p style={{ color: C.faint, fontSize: 13, margin: "0 0 10px" }}>Opening the lobby…</p>}
+      {msgs == null && <p style={{ color: C.faint, fontSize: 13, margin: "0 0 10px" }}>Opening the screening room…</p>}
       {msgs != null && all.length === 0 && (
         <p style={{ color: C.muted, fontSize: 13, margin: "0 0 10px" }}>
-          No takes yet. Be the first voice in the lobby.
+          No takes yet. Be the first voice in the room.
         </p>
       )}
       {tops.map((m, i) => (
@@ -1737,7 +1737,7 @@ function NightFlow({ state, setState, user, gated, goSignup }) {
   const settleRating = () => {
     const trimmed = note.trim();
     postToLobby(film, {
-      u: (state.handle || "Anonymous nerd").slice(0, 24),
+      u: (state.handle || "Anonymous patron").slice(0, 24),
       t: trimmed.slice(0, 500),
       r: finalVal,
       ts: Date.now(),
@@ -1879,7 +1879,7 @@ function NightFlow({ state, setState, user, gated, goSignup }) {
           <div style={{ maxWidth: 440, margin: "18px auto 0" }}>
             <textarea className="nol-input" rows={3} value={note}
               onChange={e => setNote(e.target.value)}
-              placeholder="Your take — it gets posted to this film's lobby for other nerds to see (optional)"
+              placeholder="Your take — it gets posted to this film's screening room for other patrons to see (optional)"
               style={{ resize: "vertical", fontFamily: "'Karla', sans-serif" }} />
           </div>
           <div style={{ marginTop: 18 }}>
@@ -1917,12 +1917,12 @@ function NightFlow({ state, setState, user, gated, goSignup }) {
             }}>{verdict}</div>
             {night.listPosition != null ? (
               <p style={{ color: C.faint, fontSize: 13, margin: "0 0 18px" }}>
-                That's your rank on the Rating List. Your take also landed in the film's lobby on Nerdmunity.
+                That's your rank on the Rating List. Your take also landed in the film's screening room in The Lobby.
               </p>
             ) : (
               <p style={{ color: C.muted, fontSize: 14, lineHeight: 1.6, maxWidth: 400, margin: "0 auto 18px" }}>
                 Want to see your Rating List and talk about it with the community? Create a free account
-                to unlock your Rating List, Nerdmunity, and sync across your devices.
+                to unlock your Rating List, The Lobby, and sync across your devices.
               </p>
             )}
             <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
@@ -2138,7 +2138,7 @@ function TicketsModal({ film, onClose }) {
           <a href={`https://www.amctheatres.com/search?q=${q}`} target="_blank" rel="noopener noreferrer" className="nol-ghost" style={{ textDecoration: "none", textAlign: "center" }}>AMC</a>
         </div>
         <p style={{ color: C.faint, fontSize: 11, marginTop: 14, lineHeight: 1.5 }}>
-          These links take you to each site's own search results — NerdOutLoud isn't affiliated with
+          These links take you to each site's own search results — REELmunity isn't affiliated with
           Fandango, Atom Tickets, or AMC, and doesn't process ticket purchases.
         </p>
       </div>
@@ -2329,7 +2329,7 @@ function PatronBoard({ user, handle, goAccount }) {
 
   const send = async () => {
     if (!text.trim() || !user) return;
-    const patron = (handle || "Anonymous nerd").slice(0, 24);
+    const patron = (handle || "Anonymous patron").slice(0, 24);
     const body = text.trim().slice(0, 300);
     setText("");
     await cloud.postChat(user.id, patron, body);
@@ -2350,7 +2350,7 @@ function PatronBoard({ user, handle, goAccount }) {
         boxShadow: "0 4px 18px rgba(0,0,0,0.3)", display: "flex", flexDirection: "column", overflow: "hidden",
       }}>
         <div className="nol-chat-msgs" ref={scrollRef} style={{ height: 220 }}>
-          {msgs == null && <p style={{ color: C.faint, fontSize: 13, textAlign: "center", margin: "10px 0" }}>Opening the lobby…</p>}
+          {msgs == null && <p style={{ color: C.faint, fontSize: 13, textAlign: "center", margin: "10px 0" }}>Opening the screening room…</p>}
           {msgs != null && msgs.length === 0 && (
             <p style={{ color: C.muted, fontSize: 13, textAlign: "center", margin: "10px 0", lineHeight: 1.6 }}>
               Quiet in here. Talk movies — or anything else.
@@ -2429,8 +2429,8 @@ function Picker({ state, setState, user }) {
     return () => { on = false; };
   }, []);
 
-  // Loaded once — lets the landed card show "Nerdmunity rates it 8.2" without
-  // any extra clicks or navigation, straight from the same data Nerdmunity uses.
+  // Loaded once — lets the landed card show "The Lobby rates it 8.2" without
+  // any extra clicks or navigation, straight from the same data The Lobby uses.
   useEffect(() => {
     if (!cloud.enabled()) return;
     let on = true;
@@ -2582,7 +2582,7 @@ function Picker({ state, setState, user }) {
     if (f.mood === profile.bestMood) return `${MOODS[f.mood]} films are your highest-rated genre`;
     if (f.heat) return `#${f.rank} trending — a step outside your usual lane`;
     if (f.__live) return `Currently streaming on ${f.svc}`;
-    return "A deep cut from the NerdOutLoud catalog";
+    return "A deep cut from the REELmunity catalog";
   };
 
   const spin = () => {
@@ -2637,7 +2637,7 @@ function Picker({ state, setState, user }) {
     });
     if (withRating) {
       postToLobby(display, {
-        u: (state.handle || "Anonymous nerd").slice(0, 24),
+        u: (state.handle || "Anonymous patron").slice(0, 24),
         t: noteVal.slice(0, 500), r: ratingVal, ts: Date.now(),
       }, user);
     }
@@ -2822,7 +2822,7 @@ function Picker({ state, setState, user }) {
                       color: C.amberSoft, border: `1px solid ${C.edge}`, borderRadius: 999, padding: "4px 12px",
                     }}>
                       <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 14, color: C.amber }}>{Number(cr.avg_rating).toFixed(1)}</span>
-                      Nerdmunity ({cr.rating_count})
+                      The Lobby ({cr.rating_count})
                     </span>
                   )}
                   {display.tmdbId && (
@@ -2914,7 +2914,7 @@ function TrackRecord({ state, setState, user }) {
     const f = state.films.find(x => x.id === p.filmId);
     if (f) {
       postToLobby(f, {
-        u: (state.handle || "Anonymous nerd").slice(0, 24), t: "", r: val, ts: Date.now(),
+        u: (state.handle || "Anonymous patron").slice(0, 24), t: "", r: val, ts: Date.now(),
       }, user);
     }
     setState(s => ({
@@ -3021,7 +3021,7 @@ function BoardPage({ state, setState, user, goAccount, jumpFilmId, clearJump }) 
   (communityRatings || []).forEach(row => { communityBySlug[row.slug] = row; });
 
   // Merge your own library with any community-rated films you don't have locally yet,
-  // so Nerdmunity's ranking reflects everyone, not just what happens to be in your library.
+  // so The Lobby's ranking reflects everyone, not just what happens to be in your library.
   const librarySlug = new Set(state.films.map(f => slugify(f.n)));
   const extras = (communityRatings || [])
     .filter(row => !librarySlug.has(row.slug))
@@ -3083,7 +3083,7 @@ function BoardPage({ state, setState, user, goAccount, jumpFilmId, clearJump }) 
 
   return (
     <div className="nol-fade" style={{ maxWidth: 720, margin: "0 auto", padding: "0 16px 40px" }}>
-      <SectionHead kicker="Now showing" title="Nerdmunity"
+      <SectionHead kicker="Now showing" title="The Lobby"
         sub="See the User Ranking and your own My Ranking side by side. Tap any film to talk about it — your full ranked list lives in Library." />
 
       <div style={{ fontSize: 11, letterSpacing: "0.3em", textTransform: "uppercase", color: C.amber, margin: "22px 0 8px" }}>
@@ -3352,7 +3352,7 @@ function Library({ state, setState, goToFilm }) {
   return (
     <div className="nol-fade" style={{ maxWidth: 640, margin: "0 auto", padding: "0 16px 40px" }}>
       <SectionHead kicker="The vault" title="Your library"
-        sub="Your watchlist and your ranked films, together — tap any one to talk about it on Nerdmunity." />
+        sub="Your watchlist and your ranked films, together — tap any one to talk about it in The Lobby." />
 
       <TmdbSearch state={state} setState={setState} />
 
@@ -3477,7 +3477,7 @@ function GatePage({ what, onSignup, onSignin }) {
       }}>
         <p style={{ color: C.muted, fontSize: 14, lineHeight: 1.65, margin: "0 0 18px" }}>
           A free account keeps your Rating List, ratings, and calibration score synced across
-          every device — and unlocks Nerdmunity, where you can post your takes for other nerds to see.
+          every device — and unlocks The Lobby, where you can post your takes for other patrons to see.
         </p>
         <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
           <button className="nol-btn big" onClick={onSignup}>Create an account</button>
@@ -3518,7 +3518,7 @@ function AdminPage() {
   return (
     <div className="nol-fade" style={{ maxWidth: 640, margin: "0 auto", padding: "0 16px 40px" }}>
       <SectionHead kicker="Just for you" title="Analytics"
-        sub="A quiet look at how NerdOutLoud is doing. Visible only to your account." />
+        sub="A quiet look at how REELmunity is doing. Visible only to your account." />
 
       {!stats ? (
         <p style={{ color: C.faint, textAlign: "center", padding: 20 }}>Loading…</p>
@@ -3593,7 +3593,7 @@ function ResetPasswordPage({ onDone }) {
       <div className="nol-fade" style={{ maxWidth: 480, margin: "0 auto", padding: "0 16px 40px" }}>
         <SectionHead kicker="Accounts" title="Password updated" sub="You're all set." />
         <div style={{ textAlign: "center" }}>
-          <button className="nol-btn big" onClick={onDone}>Continue to NerdOutLoud</button>
+          <button className="nol-btn big" onClick={onDone}>Continue to REELmunity</button>
         </div>
       </div>
     );
@@ -3651,7 +3651,7 @@ function AccountPage({ user, onDone, initialMode, handle, saveHandle }) {
     return (
       <div className="nol-fade" style={{ maxWidth: 560, margin: "0 auto", padding: "0 16px 40px" }}>
         <SectionHead kicker="Accounts" title="Not switched on yet"
-          sub="This copy of NerdOutLoud is running in local mode — everything saves to this browser only." />
+          sub="This copy of REELmunity is running in local mode — everything saves to this browser only." />
         <Panel title="How to turn accounts on">
           <p style={{ color: C.muted, fontSize: 14, lineHeight: 1.65, margin: 0 }}>
             Accounts, cross-device sync, and shared lobbies activate when the site is connected to a free
@@ -3682,7 +3682,7 @@ function AccountPage({ user, onDone, initialMode, handle, saveHandle }) {
         <Panel title="Sync">
           <p style={{ color: C.muted, fontSize: 14, lineHeight: 1.65, margin: 0 }}>
             Your Rating List, library, ratings, and settings sync to your account automatically and follow you
-            to any device you sign in on. Lobby posts are shared with all NerdOutLoud users. You'll stay
+            to any device you sign in on. Screening room posts are shared with all REELmunity users. You'll stay
             signed in on this device until you sign out.
           </p>
         </Panel>
@@ -3752,7 +3752,7 @@ function AccountPage({ user, onDone, initialMode, handle, saveHandle }) {
   return (
     <div className="nol-fade" style={{ maxWidth: 480, margin: "0 auto", padding: "0 16px 40px" }}>
       <SectionHead kicker="Accounts" title={mode === "signin" ? "Sign in" : "Create your account"}
-        sub="Sync your Rating List across devices and join Nerdmunity." />
+        sub="Sync your Rating List across devices and join The Lobby." />
       <div style={{ display: "flex", justifyContent: "center", marginBottom: 18 }}>
         <button className={`nol-seg${mode === "signin" ? " on" : ""}`} onClick={() => { setMode("signin"); setMsg(""); }}>Sign in</button>
         <button className={`nol-seg${mode === "signup" ? " on" : ""}`} onClick={() => { setMode("signup"); setMsg(""); }}>Create account</button>
@@ -3808,18 +3808,18 @@ function AccountPage({ user, onDone, initialMode, handle, saveHandle }) {
 const LEGAL_EFFECTIVE = "July 18, 2026";
 
 const LEGAL_TERMS = [
-  ["1. Acceptance of these terms", "By using NerdOutLoud (the \"Service\"), you agree to these Terms of Service. If you do not agree, please do not use the Service."],
-  ["2. What NerdOutLoud is", "NerdOutLoud is an entertainment tool that helps you choose movies, record personal ratings and predictions, rank films you have watched, and discuss films with other users. Information shown in the Service — including streaming availability, film details, and synopses — is provided for convenience and may be incomplete, outdated, or inaccurate. Always confirm availability with the streaming service itself."],
+  ["1. Acceptance of these terms", "By using REELmunity (the \"Service\"), you agree to these Terms of Service. If you do not agree, please do not use the Service."],
+  ["2. What REELmunity is", "REELmunity is an entertainment tool that helps you choose movies, record personal ratings and predictions, rank films you have watched, and discuss films with other users. Information shown in the Service — including streaming availability, film details, and synopses — is provided for convenience and may be incomplete, outdated, or inaccurate. Always confirm availability with the streaming service itself."],
   ["3. Eligibility", "You must be at least 13 years old to use the Service. If you are under the age of majority where you live, you may use the Service only with the consent of a parent or guardian."],
   ["4. Accounts", "You can use the Service without an account. Creating an account adds cross-device sync and the ability to post in film lobbies. If you create an account, you agree to provide accurate information, keep your login credentials confidential, and accept responsibility for all activity that occurs under your account. Accounts are personal to you and may not be shared or transferred. Notify us promptly at [YOUR CONTACT EMAIL] if you suspect unauthorized use of your account. We may suspend or terminate accounts that violate these Terms. You may request deletion of your account and its data at any time by contacting us."],
   ["5. Your content", "You may post comments, ratings, and a display handle (\"User Content\"). Content posted to film lobbies is public and displayed with your chosen handle. You keep ownership of your User Content. By posting, you grant us a non-exclusive, worldwide, royalty-free license to store and display that content within the Service so the feature can function. You are solely responsible for what you post."],
   ["6. Acceptable use", "You agree not to post content that is unlawful, harassing, hateful, defamatory, obscene, infringing, or that contains personal information about another person without their consent; not to impersonate others or misrepresent your affiliation; and not to interfere with, disrupt, or attempt to gain unauthorized access to the Service or other users' accounts. We may remove content or restrict access at our discretion, without notice."],
-  ["7. No affiliation with streaming services", "NerdOutLoud is not affiliated with, endorsed by, or sponsored by Netflix, Amazon Prime Video, Max, Hulu, Disney+, Tubi, or any other streaming service, studio, or rights holder. All trademarks, service marks, and film titles referenced belong to their respective owners and are used only to identify the services and works in question. NerdOutLoud does not host, stream, or distribute any films."],
-  ["8. Our intellectual property", "The Service's design, name, graphics, and code are owned by the operator of NerdOutLoud. You may not copy, resell, or redistribute the Service except as permitted by law."],
+  ["7. No affiliation with streaming services", "REELmunity is not affiliated with, endorsed by, or sponsored by Netflix, Amazon Prime Video, Max, Hulu, Disney+, Tubi, or any other streaming service, studio, or rights holder. All trademarks, service marks, and film titles referenced belong to their respective owners and are used only to identify the services and works in question. REELmunity does not host, stream, or distribute any films."],
+  ["8. Our intellectual property", "The Service's design, name, graphics, and code are owned by the operator of REELmunity. You may not copy, resell, or redistribute the Service except as permitted by law."],
   ["9. Third-party services", "The Service loads fonts and software libraries from third-party servers, uses a third-party database and authentication provider to power accounts and lobbies, and may link to third-party websites or apps. We are not responsible for third-party content, services, or policies."],
   ["10. Disclaimer of warranties", "THE SERVICE IS PROVIDED \"AS IS\" AND \"AS AVAILABLE,\" WITHOUT WARRANTIES OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. WE DO NOT WARRANT THAT THE SERVICE WILL BE UNINTERRUPTED, ERROR-FREE, OR THAT DATA WILL NOT BE LOST."],
-  ["11. Limitation of liability", "TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE OPERATOR OF NERDOUTLOUD WILL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR ANY LOSS OF DATA, ARISING FROM YOUR USE OF THE SERVICE. OUR TOTAL LIABILITY FOR ANY CLAIM RELATING TO THE SERVICE WILL NOT EXCEED THE GREATER OF THE AMOUNT YOU PAID US IN THE PAST TWELVE MONTHS (CURRENTLY ZERO) OR TEN U.S. DOLLARS. Some jurisdictions do not allow certain limitations, so parts of this section may not apply to you."],
-  ["12. Indemnification", "You agree to indemnify and hold harmless the operator of NerdOutLoud from claims arising out of your User Content or your violation of these Terms."],
+  ["11. Limitation of liability", "TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE OPERATOR OF REELMUNITY WILL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR ANY LOSS OF DATA, ARISING FROM YOUR USE OF THE SERVICE. OUR TOTAL LIABILITY FOR ANY CLAIM RELATING TO THE SERVICE WILL NOT EXCEED THE GREATER OF THE AMOUNT YOU PAID US IN THE PAST TWELVE MONTHS (CURRENTLY ZERO) OR TEN U.S. DOLLARS. Some jurisdictions do not allow certain limitations, so parts of this section may not apply to you."],
+  ["12. Indemnification", "You agree to indemnify and hold harmless the operator of REELmunity from claims arising out of your User Content or your violation of these Terms."],
   ["13. Copyright complaints", "If you believe content in the Service infringes your copyright, contact us at [YOUR CONTACT EMAIL] with sufficient detail to identify the material, and we will review and respond appropriately."],
   ["14. Changes and termination", "We may update these Terms or modify or discontinue the Service at any time. Material changes will be reflected by updating the effective date above. Continued use after changes means you accept the updated Terms. You may stop using the Service at any time, and may request deletion of your account as described in Section 4."],
   ["15. Governing law", "These Terms are governed by the laws of [YOUR STATE / COUNTRY], without regard to conflict-of-law rules."],
@@ -3827,7 +3827,7 @@ const LEGAL_TERMS = [
 ];
 
 const LEGAL_PRIVACY = [
-  ["1. Overview", "NerdOutLoud is local-first with optional accounts. You can use the core features with nothing stored outside your own browser; creating an account adds cross-device sync and community lobbies, which requires storing some data on servers as described below. We show no advertising, use no analytics trackers, and do not sell personal information."],
+  ["1. Overview", "REELmunity is local-first with optional accounts. You can use the core features with nothing stored outside your own browser; creating an account adds cross-device sync and community lobbies, which requires storing some data on servers as described below. We show no advertising, use no analytics trackers, and do not sell personal information."],
   ["2. Without an account (local mode)", "Your movie library, ratings, predictions, comments drafts, display handle, and settings are stored locally in your browser's storage on your device and are not transmitted to our servers."],
   ["3. With an account", "If you create an account, we store: (a) your email address and a securely hashed password, managed by our authentication provider — we never see or store your plaintext password; (b) your synced app data (library, ratings, predictions, settings, and display handle) linked to your account so it can follow you across devices; and (c) any lobby posts you make (your handle, comment text, and rating), which are public and visible to all users of the Service."],
   ["4. Where account data lives", "Account data is stored with Supabase, our database and authentication provider, which processes it on our behalf in professionally managed data centers. Their handling of infrastructure data is governed by their own privacy and security practices."],
@@ -3835,18 +3835,18 @@ const LEGAL_PRIVACY = [
   ["6. Third-party resources", "To run, the Service loads fonts from Google Fonts and JavaScript libraries from public CDNs (such as unpkg.com and jsdelivr.com), fetches film information, artwork, and streaming availability from The Movie Database (TMDB) at api.themoviedb.org, and communicates with Supabase when account features are used. When your browser contacts those providers, they receive standard technical information such as your IP address and browser type, governed by their own privacy policies. We do not control those providers."],
   ["7. How we use your information", "We use the information described above only to operate the Service: authenticating you, syncing your data across your devices, and displaying lobby posts to other users. We do not use it for advertising, profiling, or sale to third parties."],
   ["8. Children", "The Service is not directed to children under 13, and we do not knowingly collect personal information from children under 13. If you believe a child has provided personal information, contact us and we will delete it."],
-  ["9. Your choices and deletion", "Local mode: clearing your browser's site data for NerdOutLoud permanently deletes locally stored information. Accounts: you can sign out at any time, and you can request deletion of your account, synced data, and lobby posts by contacting us at [YOUR CONTACT EMAIL]; we will act on verified requests within a reasonable time. Note that lobby posts are public while they exist, and other users may have seen them before deletion."],
+  ["9. Your choices and deletion", "Local mode: clearing your browser's site data for REELmunity permanently deletes locally stored information. Accounts: you can sign out at any time, and you can request deletion of your account, synced data, and lobby posts by contacting us at [YOUR CONTACT EMAIL]; we will act on verified requests within a reasonable time. Note that lobby posts are public while they exist, and other users may have seen them before deletion."],
   ["10. Security", "Passwords are hashed using industry-standard methods by our authentication provider, account data is protected by per-user access rules at the database level, and connections use encryption in transit. No method of storage or transmission is 100% secure; data kept in your browser is additionally protected only by your device's own security."],
   ["11. Changes to this policy", "If we add features that change how data is handled, we will update this policy and its effective date before those features go live."],
   ["12. Contact", "Privacy questions or requests: [YOUR CONTACT EMAIL]."],
 ];
 
 const LEGAL_ACCESS = [
-  ["1. Our commitment", "We want NerdOutLoud to be usable by everyone, including people who use assistive technologies such as screen readers, switch devices, or keyboard-only navigation. Accessibility is treated as an ongoing effort, not a one-time checkbox."],
+  ["1. Our commitment", "We want REELmunity to be usable by everyone, including people who use assistive technologies such as screen readers, switch devices, or keyboard-only navigation. Accessibility is treated as an ongoing effort, not a one-time checkbox."],
   ["2. Standard we aim for", "Our target is conformance with the Web Content Accessibility Guidelines (WCAG) 2.1, Level AA. The Service has not yet undergone a formal third-party accessibility audit, and we consider it partially conformant: some parts may not yet fully meet the standard."],
   ["3. What is in place today", "The Service currently includes: respect for your device's reduced-motion preference (animations are disabled when it is set); text labels or ARIA labels on icon-only controls; keyboard-operable buttons and form controls; enlarged touch targets on touchscreens; responsive layouts and scalable text that adapt to small screens and zoom; and decorative graphics marked as hidden from assistive technology."],
   ["4. Known limitations", "Areas we are still improving include: full screen-reader testing across all flows; color contrast in a small number of decorative elements; some information conveyed partly by color (such as verdict badges), which we plan to supplement with text in all cases; and user-posted lobby content, which we cannot guarantee is accessible."],
-  ["5. Feedback and assistance", "If you encounter a barrier that prevents you from using any part of NerdOutLoud, please tell us at [YOUR CONTACT EMAIL]. Include the page or feature, your device and assistive technology if applicable, and what went wrong. We will make reasonable efforts to respond promptly and to fix verified issues or provide the information you needed in an accessible way."],
+  ["5. Feedback and assistance", "If you encounter a barrier that prevents you from using any part of REELmunity, please tell us at [YOUR CONTACT EMAIL]. Include the page or feature, your device and assistive technology if applicable, and what went wrong. We will make reasonable efforts to respond promptly and to fix verified issues or provide the information you needed in an accessible way."],
   ["6. Compatibility", "The Service is designed for current versions of major browsers (Chrome, Safari, Firefox, Edge) on desktop and mobile. It may not function correctly in outdated browsers."],
   ["7. Continuous improvement", "As features are added, we will review them against this statement and update it, including its effective date, to reflect the current state of the Service."],
 ];
@@ -3875,7 +3875,7 @@ function LegalPage({ initialTab }) {
         ))}
       </div>
       <p style={{ color: C.faint, fontSize: 12, lineHeight: 1.6, marginTop: 16, textAlign: "center" }}>
-        NerdOutLoud is not affiliated with any streaming service. All trademarks and film titles belong to their respective owners.
+        REELmunity is not affiliated with any streaming service. All trademarks and film titles belong to their respective owners.
       </p>
     </div>
   );
@@ -3885,7 +3885,7 @@ function Empty({ text }) {
   return <p style={{ color: C.muted, textAlign: "center", padding: "40px 20px", maxWidth: 460, margin: "0 auto", lineHeight: 1.6 }}>{text}</p>;
 }
 
-export default function NerdOutLoud() {
+export default function REELmunity() {
   const [state, setState] = useState(null);
   const [view, setView] = useState("home");
   const [legalTab, setLegalTab] = useState("terms");
@@ -4130,7 +4130,7 @@ export default function NerdOutLoud() {
             </>)}
         {view === "theaters" && <TheatersPage />}
         {view === "board" && (gated
-          ? <GatePage what="Nerdmunity — chat, discussions, and the film lobbies" onSignup={goSignup} onSignin={goSignin} />
+          ? <GatePage what="The Lobby — chat, discussions, and the film screening rooms" onSignup={goSignup} onSignin={goSignin} />
           : <BoardPage state={state} setState={setState} user={user} goAccount={() => setView("account")} jumpFilmId={jumpFilmId} clearJump={() => setJumpFilmId(null)} />)}
         {view === "library" && (gated
           ? <GatePage what="your watchlist, ranking, and the every-movie search" onSignup={goSignup} onSignin={goSignin} />
@@ -4142,7 +4142,7 @@ export default function NerdOutLoud() {
       </main>
       <footer style={{ textAlign: "center", padding: "26px 16px 12px" }}>
         <div style={{ color: C.faint, fontSize: 11, letterSpacing: "0.3em", textTransform: "uppercase", marginBottom: 10 }}>
-          A NerdOutLoud production
+          A REELmunity production
         </div>
         <div style={{ display: "flex", gap: 18, justifyContent: "center", marginBottom: 8 }}>
           <span className="nol-danger-link" style={{ textDecoration: "underline" }}
@@ -4159,7 +4159,7 @@ export default function NerdOutLoud() {
           Movie data powered by TMDB. This product uses the TMDB API but is not endorsed or certified by TMDB.
         </p>
         <p style={{ color: C.faint, fontSize: 11, lineHeight: 1.6, margin: "10px auto 0" }}>
-          © {new Date().getFullYear()} NerdOutLoud™. All rights reserved.
+          © {new Date().getFullYear()} REELmunity™. All rights reserved.
         </p>
       </footer>
     </div>

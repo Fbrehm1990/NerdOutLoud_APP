@@ -1,7 +1,7 @@
 {
-  "name": "NerdOutLoud",
-  "short_name": "NerdOutLoud",
-  "description": "Stop scrolling. Start watching. NerdOutLoud picks your movie and gets you talking about it with Nerdmunity.",
+  "name": "REELmunity",
+  "short_name": "REELmunity",
+  "description": "Stop scrolling. Start watching. REELmunity picks your movie and gets you talking about it in The Lobby.",
   "start_url": ".",
   "display": "standalone",
   "background_color": "#0D0F1E",
