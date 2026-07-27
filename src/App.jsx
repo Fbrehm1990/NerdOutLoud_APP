@@ -349,6 +349,27 @@ const tmdb = {
     const j = await r.json();
     return (j.results || []).slice(0, 8);
   },
+  // Searching an actor/actress's name should surface their movies, not just
+  // literal title matches — TMDB's movie search alone won't do that.
+  async searchPerson(q) {
+    try {
+      const r = await fetch(tmdbProxy("/search/person", { include_adult: "false", query: q }));
+      if (!r.ok) return null;
+      const j = await r.json();
+      const top = (j.results || [])[0];
+      return top || null;
+    } catch { return null; }
+  },
+  async personMovieCredits(personId) {
+    try {
+      const r = await fetch(tmdbProxy(`/person/${personId}/movie_credits`));
+      if (!r.ok) return [];
+      const j = await r.json();
+      const cast = (j.cast || []).filter(m => m.poster_path || m.title);
+      cast.sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+      return cast.slice(0, 8);
+    } catch { return []; }
+  },
   async filmDetails(id) {
     const r = await fetch(tmdbProxy(`/movie/${id}`, { append_to_response: "credits,watch/providers,release_dates" }));
     if (!r.ok) throw new Error("details failed");
@@ -467,7 +488,7 @@ const tmdb = {
   // TMDB's release_dates carry a "type" per country (4 = Digital/streaming release),
   // separate from the theatrical date already shown elsewhere. Cached per film per day.
   async streamingInfo(id) {
-    const cacheKey = "nol-tmdb-streaminfo-" + id;
+    const cacheKey = "nol-tmdb-streaminfo-v2-" + id;
     try {
       const cached = await store.get(cacheKey);
       if (cached) {
@@ -475,17 +496,20 @@ const tmdb = {
         if (day === new Date().toDateString()) return info;
       }
     } catch { /* refetch */ }
-    let info = null;
+    let info = { svc: null, date: null, hasTheatrical: false };
     try {
       const d = await tmdb.filmDetails(id);
       const svc = tmdbSvc(d["watch/providers"]);
       const usEntry = ((d.release_dates && d.release_dates.results) || []).find(r => r.iso_3166_1 === "US");
-      const digitalEntries = usEntry ? usEntry.release_dates.filter(rd => rd.type === 4) : [];
+      const allUsDates = usEntry ? usEntry.release_dates : [];
+      // type 2 = Theatrical (limited), type 3 = Theatrical — either counts as a real theatrical release.
+      const hasTheatrical = allUsDates.some(rd => rd.type === 2 || rd.type === 3);
+      const digitalEntries = allUsDates.filter(rd => rd.type === 4);
       const digitalDate = digitalEntries.length
         ? digitalEntries.map(rd => rd.release_date).sort()[0].slice(0, 10)
         : null;
-      if (svc !== "Other" || digitalDate) info = { svc: svc === "Other" ? null : svc, date: digitalDate };
-    } catch { /* leave null, badges just won't show for this one */ }
+      info = { svc: svc === "Other" ? null : svc, date: digitalDate, hasTheatrical };
+    } catch { /* leave defaults — treated as stream-only until we know more */ }
     try { await store.set(cacheKey, JSON.stringify({ day: new Date().toDateString(), info })); } catch { /* ignore */ }
     return info;
   },
@@ -2218,30 +2242,8 @@ function ReleaseDateModal({ film, onClose }) {
 }
 
 // ---------------- In Theaters: everything playing now and coming soon ----------------
-function TheaterPosterGrid({ items, badge, badgeColor, onOverview, onTrailer, onThird, thirdLabel, showStreamingInfo }) {
+function TheaterPosterGrid({ items, badge, badgeColor, onOverview, onTrailer, onThird, thirdLabel, streamInfo }) {
   const [revealedId, setRevealedId] = useState(null);
-  const [streamInfo, setStreamInfo] = useState({});
-
-  useEffect(() => {
-    if (!showStreamingInfo || !items || !items.length) return;
-    let on = true;
-    const ids = items.map(t => t.tmdbId).filter(id => !(id in streamInfo));
-    const BATCH = 6; // fetch a handful at a time rather than firing everything at once
-    (async () => {
-      for (let i = 0; i < ids.length; i += BATCH) {
-        if (!on) return;
-        const batch = ids.slice(i, i + BATCH);
-        const results = await Promise.all(batch.map(id => tmdb.streamingInfo(id).catch(() => null)));
-        if (!on) return;
-        setStreamInfo(prev => {
-          const next = { ...prev };
-          batch.forEach((id, j) => { next[id] = results[j]; });
-          return next;
-        });
-      }
-    })();
-    return () => { on = false; };
-  }, [showStreamingInfo, items.map(t => t.tmdbId).join(",")]);
 
   const formatDate = (iso) => {
     if (!iso) return null;
@@ -2252,7 +2254,7 @@ function TheaterPosterGrid({ items, badge, badgeColor, onOverview, onTrailer, on
     <div className="nol-theater-grid">
       {items.map(t => {
         const revealed = revealedId === t.tmdbId;
-        const info = streamInfo[t.tmdbId];
+        const info = streamInfo && streamInfo[t.tmdbId];
         return (
           <div key={t.tmdbId} className="nol-trend-card nol-theater-card"
             onClick={() => setRevealedId(revealed ? null : t.tmdbId)}
@@ -2306,6 +2308,7 @@ function TheaterPosterGrid({ items, badge, badgeColor, onOverview, onTrailer, on
 function TheatersPage() {
   const [nowPlaying, setNowPlaying] = useState(null);
   const [upcoming, setUpcoming] = useState(null);
+  const [comingSoonInfo, setComingSoonInfo] = useState(null); // null = still sorting, {} once done
   const [tab, setTab] = useState("now");
   const [theaterFilm, setTheaterFilm] = useState(null);
   const [theaterMode, setTheaterMode] = useState(null);
@@ -2318,12 +2321,35 @@ function TheatersPage() {
     return () => { on = false; };
   }, []);
 
+  // Once the Coming Soon list is in, classify every title as bound for a real
+  // theatrical release or not, so the page can split them into two honest groups
+  // instead of mixing "opening in theaters" with "streaming-only" together.
+  useEffect(() => {
+    if (!upcoming || !upcoming.length) return;
+    let on = true;
+    setComingSoonInfo(null);
+    (async () => {
+      const info = {};
+      const BATCH = 6;
+      for (let i = 0; i < upcoming.length; i += BATCH) {
+        if (!on) return;
+        const batch = upcoming.slice(i, i + BATCH);
+        const results = await Promise.all(batch.map(t => tmdb.streamingInfo(t.tmdbId).catch(() => ({ svc: null, date: null, hasTheatrical: false }))));
+        batch.forEach((t, j) => { info[t.tmdbId] = results[j]; });
+      }
+      if (on) setComingSoonInfo(info);
+    })();
+    return () => { on = false; };
+  }, [upcoming && upcoming.map(t => t.tmdbId).join(",")]);
+
   const openOverview = (t) => { setTheaterFilm(t); setTheaterMode("overview"); };
   const openTrailer = (t) => { setTheaterFilm(t); setTheaterMode("trailer"); };
   const openTickets = (t) => { setTheaterFilm(t); setTheaterMode("tickets"); };
   const openRelease = (t) => { setTheaterFilm(t); setTheaterMode("release"); };
 
   const list = tab === "now" ? nowPlaying : upcoming;
+  const theatrical = (upcoming && comingSoonInfo) ? upcoming.filter(t => comingSoonInfo[t.tmdbId] && comingSoonInfo[t.tmdbId].hasTheatrical) : [];
+  const streamOnly = (upcoming && comingSoonInfo) ? upcoming.filter(t => !(comingSoonInfo[t.tmdbId] && comingSoonInfo[t.tmdbId].hasTheatrical)) : [];
 
   return (
     <div className="nol-fade" style={{ maxWidth: 900, margin: "0 auto", padding: "0 16px 40px" }}>
@@ -2341,14 +2367,36 @@ function TheatersPage() {
 
       {list === null && <p style={{ color: C.faint, textAlign: "center", padding: 30 }}>Loading…</p>}
       {list && list.length === 0 && <p style={{ color: C.muted, textAlign: "center", padding: 30 }}>Nothing on file right now — check back soon.</p>}
-      {list && list.length > 0 && (
-        tab === "now" ? (
-          <TheaterPosterGrid items={list} badge="IN THEATERS" badgeColor={C.red}
-            onOverview={openOverview} onTrailer={openTrailer} onThird={openTickets} thirdLabel="Buy Tickets" />
+
+      {tab === "now" && list && list.length > 0 && (
+        <TheaterPosterGrid items={list} badge="IN THEATERS" badgeColor={C.red}
+          onOverview={openOverview} onTrailer={openTrailer} onThird={openTickets} thirdLabel="Buy Tickets" />
+      )}
+
+      {tab === "coming" && list && list.length > 0 && (
+        comingSoonInfo === null ? (
+          <p style={{ color: C.faint, textAlign: "center", padding: 30 }}>Sorting theatrical releases from streaming-only titles…</p>
         ) : (
-          <TheaterPosterGrid items={list} badge="COMING SOON" badgeColor={C.green}
-            onOverview={openOverview} onTrailer={openTrailer} onThird={openRelease} thirdLabel="Release Date"
-            showStreamingInfo />
+          <>
+            {theatrical.length > 0 && (
+              <div style={{ marginBottom: 32 }}>
+                <div style={{ fontSize: 13, letterSpacing: "0.15em", textTransform: "uppercase", color: C.amber, marginBottom: 14, textAlign: "center" }}>
+                  Coming soon to a theatre near you
+                </div>
+                <TheaterPosterGrid items={theatrical} badge="COMING SOON" badgeColor={C.green} streamInfo={comingSoonInfo}
+                  onOverview={openOverview} onTrailer={openTrailer} onThird={openRelease} thirdLabel="Release Date" />
+              </div>
+            )}
+            {streamOnly.length > 0 && (
+              <div>
+                <div style={{ fontSize: 13, letterSpacing: "0.15em", textTransform: "uppercase", color: C.green, marginBottom: 14, textAlign: "center" }}>
+                  Coming soon to stream
+                </div>
+                <TheaterPosterGrid items={streamOnly} badge="COMING SOON" badgeColor={C.green} streamInfo={comingSoonInfo}
+                  onOverview={openOverview} onTrailer={openTrailer} onThird={openRelease} thirdLabel="Release Date" />
+              </div>
+            )}
+          </>
         )
       )}
 
@@ -3070,6 +3118,11 @@ function BoardPage({ state, setState, user, goAccount, jumpFilmId, clearJump }) 
   const [expandedId, setExpandedId] = useState(jumpFilmId || null);
   const [pulse, setPulse] = useState(null);
   const [communityRatings, setCommunityRatings] = useState(null);
+  const [searchQ, setSearchQ] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [showResults, setShowResults] = useState(false);
+  const searchTimer = useRef(null);
 
   useEffect(() => {
     if (!jumpFilmId) return;
@@ -3156,10 +3209,78 @@ function BoardPage({ state, setState, user, goAccount, jumpFilmId, clearJump }) 
     setExpandedId(newId);
   };
 
+  // Search for any movie to jump straight to its screening room — even ones
+  // nobody's added or rated yet. Reuses openFilm's existing materialize-or-open logic.
+  const onSearchChange = (val) => {
+    setSearchQ(val);
+    setShowResults(true);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    if (val.trim().length < 2) { setSearchResults([]); setSearching(false); return; }
+    setSearching(true);
+    searchTimer.current = setTimeout(async () => {
+      try {
+        const rows = await tmdb.search(val.trim());
+        setSearchResults(rows || []);
+      } catch { setSearchResults([]); }
+      setSearching(false);
+    }, 400);
+  };
+
+  const pickSearchResult = (row) => {
+    const title = row.title || row.name || "Untitled";
+    const existing = state.films.find(f => slugify(f.n) === slugify(title));
+    const shaped = existing || {
+      __synthetic: true, __slug: slugify(title),
+      n: title, y: row.release_date ? Number(row.release_date.slice(0, 4)) : new Date().getFullYear(),
+      d: "Unknown", rt: 110, mood: "drama", svc: "Other", poster: row.poster_path || null,
+    };
+    openFilm(shaped);
+    setSearchQ(""); setSearchResults([]); setShowResults(false);
+  };
+
   return (
     <div className="nol-fade" style={{ maxWidth: 720, margin: "0 auto", padding: "0 16px 40px" }}>
       <SectionHead kicker="Now showing" title="The Lobby"
         sub="See the User Ranking and your own My Ranking side by side. Tap any film to talk about it — your full ranked list lives in Library." />
+
+      <div style={{ position: "relative", marginBottom: 20 }}>
+        <input className="nol-input" placeholder="Search for a movie to review…" value={searchQ}
+          onChange={e => onSearchChange(e.target.value)}
+          onFocus={() => setShowResults(true)}
+          onBlur={() => setTimeout(() => setShowResults(false), 150)} />
+        {showResults && searchQ.trim().length >= 2 && (
+          <div style={{
+            position: "absolute", top: "calc(100% + 6px)", left: 0, right: 0, zIndex: 5,
+            background: C.panel, border: `1px solid ${C.edge}`, borderRadius: 8,
+            maxHeight: 340, overflowY: "auto", boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
+          }}>
+            {searching && <p style={{ color: C.faint, fontSize: 13, padding: "12px 14px", margin: 0 }}>Searching…</p>}
+            {!searching && searchResults.length === 0 && (
+              <p style={{ color: C.faint, fontSize: 13, padding: "12px 14px", margin: 0 }}>No matches found.</p>
+            )}
+            {!searching && searchResults.map(row => (
+              <div key={row.id} onMouseDown={() => pickSearchResult(row)} className="nol-row" style={{
+                display: "flex", alignItems: "center", gap: 10, padding: "8px 14px", cursor: "pointer",
+              }}>
+                {row.poster_path ? (
+                  <img src={`https://image.tmdb.org/t/p/w92${row.poster_path}`} alt=""
+                    style={{ width: 34, height: 51, objectFit: "cover", borderRadius: 3, flexShrink: 0 }} />
+                ) : (
+                  <div style={{ width: 34, height: 51, borderRadius: 3, background: C.panelHi, flexShrink: 0 }} />
+                )}
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {row.title || row.name}
+                  </div>
+                  <div style={{ fontSize: 11, color: C.faint }}>
+                    {row.release_date ? row.release_date.slice(0, 4) : ""}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div style={{ fontSize: 11, letterSpacing: "0.3em", textTransform: "uppercase", color: C.amber, margin: "22px 0 8px" }}>
         Ranked by everyone's ratings — tap one to talk
@@ -3302,6 +3423,8 @@ function BoardPage({ state, setState, user, goAccount, jumpFilmId, clearJump }) 
 function TmdbSearch({ state, setState }) {
   const [q, setQ] = useState("");
   const [results, setResults] = useState(null);
+  const [personMatch, setPersonMatch] = useState(null);
+  const [personMovies, setPersonMovies] = useState(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [adding, setAdding] = useState(null);
@@ -3309,11 +3432,19 @@ function TmdbSearch({ state, setState }) {
 
   const doSearch = async () => {
     if (!q.trim()) return;
-    setBusy(true); setMsg(""); setResults(null);
+    setBusy(true); setMsg(""); setResults(null); setPersonMatch(null); setPersonMovies(null);
     try {
-      const rows = await tmdb.search(q.trim());
+      const [rows, person] = await Promise.all([
+        tmdb.search(q.trim()),
+        tmdb.searchPerson(q.trim()),
+      ]);
       setResults(rows);
-      if (!rows.length) setMsg("No matches found.");
+      if (!rows.length && !person) setMsg("No matches found.");
+      if (person) {
+        setPersonMatch(person);
+        const movies = await tmdb.personMovieCredits(person.id);
+        setPersonMovies(movies);
+      }
     } catch { setMsg("Search failed — check your connection and try again."); }
     setBusy(false);
   };
@@ -3335,37 +3466,49 @@ function TmdbSearch({ state, setState }) {
     setAdding(null);
   };
 
+  const renderRow = (r, i, total) => (
+    <div key={r.id} className="nol-row" style={{
+      display: "flex", gap: 12, alignItems: "center", padding: "10px 4px", flexWrap: "wrap",
+      borderBottom: i < total - 1 ? `1px solid ${C.edge}` : "none",
+    }}>
+      {r.poster_path
+        ? <img src={`https://image.tmdb.org/t/p/w92${r.poster_path}`} alt="" width={34} height={51}
+            style={{ borderRadius: 4, flexShrink: 0, objectFit: "cover" }} />
+        : <div style={{ width: 34, height: 51, background: C.panelHi, borderRadius: 4, flexShrink: 0 }} />}
+      <div style={{ flex: 1, minWidth: 120 }}>
+        <div style={{ fontWeight: 700, fontSize: 14 }}>{r.title}</div>
+        <div style={{ color: C.faint, fontSize: 12 }}>
+          {r.release_date ? r.release_date.slice(0, 4) : "—"}{r.character ? ` · as ${r.character}` : ""}
+        </div>
+      </div>
+      <button className="nol-chip" onClick={() => add(r, "watchlist")} disabled={!!adding}>
+        {adding === r.id + "watchlist" ? "…" : "+ Watchlist"}
+      </button>
+      <button className="nol-chip" onClick={() => add(r, "watched")} disabled={!!adding}>
+        {adding === r.id + "watched" ? "…" : "+ Watched"}
+      </button>
+    </div>
+  );
+
   return (
     <Panel title="Search every movie" right="live · powered by TMDB">
       <div style={{ display: "flex", gap: 8 }}>
-        <input className="nol-input" placeholder="Search any film ever made…" value={q}
+        <input className="nol-input" placeholder="Search any film, actor, or actress…" value={q}
           onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === "Enter") doSearch(); }} />
         <button className="nol-btn" onClick={doSearch} disabled={busy || !q.trim()} style={{ whiteSpace: "nowrap" }}>
           {busy ? "…" : "Search"}
         </button>
       </div>
       {msg && <p style={{ color: C.amberSoft, fontSize: 13, margin: "10px 0 0", lineHeight: 1.5 }}>{msg}</p>}
-      {results && results.map((r, i) => (
-        <div key={r.id} className="nol-row" style={{
-          display: "flex", gap: 12, alignItems: "center", padding: "10px 4px", flexWrap: "wrap",
-          borderBottom: i < results.length - 1 ? `1px solid ${C.edge}` : "none",
-        }}>
-          {r.poster_path
-            ? <img src={`https://image.tmdb.org/t/p/w92${r.poster_path}`} alt="" width={34} height={51}
-                style={{ borderRadius: 4, flexShrink: 0, objectFit: "cover" }} />
-            : <div style={{ width: 34, height: 51, background: C.panelHi, borderRadius: 4, flexShrink: 0 }} />}
-          <div style={{ flex: 1, minWidth: 120 }}>
-            <div style={{ fontWeight: 700, fontSize: 14 }}>{r.title}</div>
-            <div style={{ color: C.faint, fontSize: 12 }}>{r.release_date ? r.release_date.slice(0, 4) : "—"}</div>
+      {results && results.length > 0 && results.map((r, i) => renderRow(r, i, results.length))}
+      {personMatch && personMovies && personMovies.length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <div style={{ fontSize: 11, letterSpacing: "0.15em", textTransform: "uppercase", color: C.amber, margin: "0 0 8px 4px" }}>
+            Movies with {personMatch.name}
           </div>
-          <button className="nol-chip" onClick={() => add(r, "watchlist")} disabled={!!adding}>
-            {adding === r.id + "watchlist" ? "…" : "+ Watchlist"}
-          </button>
-          <button className="nol-chip" onClick={() => add(r, "watched")} disabled={!!adding}>
-            {adding === r.id + "watched" ? "…" : "+ Watched"}
-          </button>
+          {personMovies.map((r, i) => renderRow(r, i, personMovies.length))}
         </div>
-      ))}
+      )}
     </Panel>
   );
 }
