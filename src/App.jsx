@@ -3361,7 +3361,7 @@ function Library({ state, setState, goToFilm }) {
           Watchlist · {counts.watchlist}
         </button>
         <button className={`nol-seg${tab === "watched" ? " on" : ""}`} onClick={() => setTab("watched")}>
-          Rated · {counts.watched}
+          Watched · {counts.watched}
         </button>
       </div>
 
@@ -3943,6 +3943,7 @@ export default function REELmunity() {
     if (!user || !state || syncedFor.current === user.id) return;
     syncedFor.current = user.id;
     const localNotifs = state.notifications || [];
+    const localFilms = state.films || [];
     (async () => {
       const remote = await cloud.loadState(user.id);
       const finalHandle = remote && remote.handle ? remote.handle : state.handle;
@@ -3954,7 +3955,19 @@ export default function REELmunity() {
         const mergedNotifs = [...remoteNotifs, ...localNotifs.filter(n => !remoteIds.has(n.id))]
           .sort((a, b) => b.ts - a.ts)
           .slice(0, 30);
-        setState({ ...SEED, ...remote, notifications: mergedNotifs });
+        // Same protection for ratings: if a film was just rated locally and the cloud
+        // hasn't caught up yet, don't let the stale remote copy wipe that rating back out.
+        const remoteFilms = remote.films || [];
+        const remoteFilmIds = new Set(remoteFilms.map(f => f.id));
+        const mergedFilms = remoteFilms.map(rf => {
+          const lf = localFilms.find(x => x.id === rf.id);
+          if (lf && lf.rating != null && rf.rating == null) {
+            return { ...rf, rating: lf.rating, status: lf.status, note: lf.note || rf.note };
+          }
+          return rf;
+        });
+        const onlyLocalFilms = localFilms.filter(f => !remoteFilmIds.has(f.id));
+        setState({ ...SEED, ...remote, notifications: mergedNotifs, films: [...mergedFilms, ...onlyLocalFilms] });
       } else {
         cloud.saveState(user.id, state);
       }
@@ -4084,7 +4097,6 @@ export default function REELmunity() {
   const dismissNotif = (n) => setState(s => s ? { ...s, notifications: (s.notifications || []).filter(x => x.id !== n.id) } : s);
   const onClickNotif = (n) => {
     setState(s => s ? { ...s, notifications: (s.notifications || []).map(x => x.id === n.id ? { ...x, read: true } : x) } : s);
-    setNotifOpen(false);
     if (n.filmSlug) {
       const f = state.films.find(f2 => slugify(f2.n) === n.filmSlug);
       if (f) { setJumpFilmId(f.id); setView("board"); return; }
