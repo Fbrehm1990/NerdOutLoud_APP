@@ -2824,21 +2824,6 @@ function Picker({ state, setState, user }) {
 
   return (
     <div className="nol-fade" style={{ maxWidth: 680, margin: "0 auto", padding: "18px 16px 8px" }}>
-      <TrendingStrip items={liveTrending || TRENDING} live={!!liveTrending} theaterIds={theaterIds} upcomingIds={upcomingIds}
-        onOverview={(t) => { setTheaterFilm(t); setTheaterMode("overview"); }}
-        onTrailer={(t) => { setTheaterFilm(t); setTheaterMode("trailer"); }}
-        onTickets={(t) => { setTheaterFilm(t); setTheaterMode("tickets"); }}
-        onReleaseDate={(t) => { setTheaterFilm(t); setTheaterMode("release"); }}
-        onPick={(t, rank) => {
-          if (phase === "spinning") return;
-          setDisplay({ ...t, __manual: true });
-          setWhy(`#${rank} trending this week`);
-          setPhase("landed");
-        }} />
-      {theaterFilm && theaterMode === "overview" && <OverviewModal film={theaterFilm} onClose={() => setTheaterMode(null)} />}
-      {theaterFilm && theaterMode === "trailer" && <TrailerModal film={theaterFilm} onClose={() => setTheaterMode(null)} />}
-      {theaterFilm && theaterMode === "tickets" && <TicketsModal film={theaterFilm} onClose={() => setTheaterMode(null)} />}
-      {theaterFilm && theaterMode === "release" && <ReleaseDateModal film={theaterFilm} onClose={() => setTheaterMode(null)} />}
       <SectionHead kicker="The main attraction" title="What are we watching?"
         sub="Choose how it picks, spin once, and the scrolling is over. One veto per night." />
 
@@ -3020,6 +3005,24 @@ function Picker({ state, setState, user }) {
         <Stat label="Honor" value={honor == null ? "—" : `${honor}%`} accent={C.amber} />
         <Stat label="Calibration" value={calibration == null ? "—" : `${calibration}%`} accent={C.amber} />
         <Stat label="Taste lane" value={MOODS[profile.bestMood].split(" ")[0]} accent={C.green} />
+      </div>
+
+      <div style={{ marginTop: 34, paddingTop: 26, borderTop: `1px solid ${C.edge}` }}>
+        <TrendingStrip items={liveTrending || TRENDING} live={!!liveTrending} theaterIds={theaterIds} upcomingIds={upcomingIds}
+          onOverview={(t) => { setTheaterFilm(t); setTheaterMode("overview"); }}
+          onTrailer={(t) => { setTheaterFilm(t); setTheaterMode("trailer"); }}
+          onTickets={(t) => { setTheaterFilm(t); setTheaterMode("tickets"); }}
+          onReleaseDate={(t) => { setTheaterFilm(t); setTheaterMode("release"); }}
+          onPick={(t, rank) => {
+            if (phase === "spinning") return;
+            setDisplay({ ...t, __manual: true });
+            setWhy(`#${rank} trending this week`);
+            setPhase("landed");
+          }} />
+        {theaterFilm && theaterMode === "overview" && <OverviewModal film={theaterFilm} onClose={() => setTheaterMode(null)} />}
+        {theaterFilm && theaterMode === "trailer" && <TrailerModal film={theaterFilm} onClose={() => setTheaterMode(null)} />}
+        {theaterFilm && theaterMode === "tickets" && <TicketsModal film={theaterFilm} onClose={() => setTheaterMode(null)} />}
+        {theaterFilm && theaterMode === "release" && <ReleaseDateModal film={theaterFilm} onClose={() => setTheaterMode(null)} />}
       </div>
     </div>
   );
