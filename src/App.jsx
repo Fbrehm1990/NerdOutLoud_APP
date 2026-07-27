@@ -267,6 +267,20 @@ const cloud = (() => {
         };
       } catch { return null; }
     },
+    // How many genuinely new users (first spin ever, this browser/account) actually
+    // tried the core feature — a real activation signal, distinct from raw spin volume.
+    async getNewUserPickerStats() {
+      const c = ready(); if (!c) return null;
+      try {
+        const { count: total, error: e1 } = await c.from("nol_events").select("*", { count: "exact", head: true }).eq("event_type", "new_user_first_spin");
+        if (e1) return null;
+        const since7 = new Date(Date.now() - 7 * 86400000).toISOString();
+        const since30 = new Date(Date.now() - 30 * 86400000).toISOString();
+        const { count: last7 } = await c.from("nol_events").select("*", { count: "exact", head: true }).eq("event_type", "new_user_first_spin").gte("created_at", since7);
+        const { count: last30 } = await c.from("nol_events").select("*", { count: "exact", head: true }).eq("event_type", "new_user_first_spin").gte("created_at", since30);
+        return { total, last7, last30 };
+      } catch { return null; }
+    },
     async getPageviewCount() {
       const c = ready(); if (!c) return null;
       try {
@@ -784,6 +798,7 @@ const SEED = {
   vetoesLeft: 2,
   notifSeen: { trending: [], svc: {} },
   nightLog: [],
+  everSpun: false,
   nextId: 13,
 };
 
@@ -2876,6 +2891,10 @@ function Picker({ state, setState, user }) {
     const p0 = buildPool();
     if (p0.length === 0) return;
     cloud.logEvent("spin", { source });
+    if (!state.everSpun) {
+      cloud.logEvent("new_user_first_spin", {});
+      setState(s => ({ ...s, everSpun: true }));
+    }
     setPhase("spinning");
     setWhy("");
     let ticks = 0;
@@ -3883,12 +3902,13 @@ function AdminPage() {
   const [members, setMembers] = useState(null);
   const [vetoStats, setVetoStats] = useState(null);
   const [eventStats, setEventStats] = useState(null);
+  const [newUserStats, setNewUserStats] = useState(null);
 
   useEffect(() => {
     if (!cloud.enabled()) return;
     let on = true;
     (async () => {
-      const [visits, visits7, visits30, accounts, lobby, chats, recent, vetoes, events] = await Promise.all([
+      const [visits, visits7, visits30, accounts, lobby, chats, recent, vetoes, events, newUsers] = await Promise.all([
         cloud.getPageviewCount(),
         cloud.getPageviewsSince(7),
         cloud.getPageviewsSince(30),
@@ -3898,12 +3918,14 @@ function AdminPage() {
         cloud.recentMembers(8),
         cloud.getVetoStats(),
         cloud.getEventStats(),
+        cloud.getNewUserPickerStats(),
       ]);
       if (!on) return;
       setStats({ visits, visits7, visits30, accounts, lobby, chats });
       setMembers(recent);
       setVetoStats(vetoes);
       setEventStats(events);
+      setNewUserStats(newUsers);
     })();
     return () => { on = false; };
   }, []);
@@ -3935,6 +3957,20 @@ function AdminPage() {
             <p style={{ color: C.faint, fontSize: 11, textAlign: "center", marginTop: -14, marginBottom: 20 }}>
               Comment/rating/reaction counts are from the most recent 5,000 lobby posts.
             </p>
+          )}
+
+          {newUserStats && newUserStats.total > 0 && (
+            <Panel title="New users trying the picker">
+              <p style={{ color: C.faint, fontSize: 12, margin: "0 0 14px", lineHeight: 1.5 }}>
+                Counted once per browser or account, the very first time they ever spin —
+                a real signal of new people actually trying the core feature, not just visiting.
+              </p>
+              <div style={{ display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap" }}>
+                <Stat label="All time" value={v(newUserStats.total)} accent={C.amber} />
+                <Stat label="Last 7 days" value={v(newUserStats.last7)} />
+                <Stat label="Last 30 days" value={v(newUserStats.last30)} accent={C.green} />
+              </div>
+            </Panel>
           )}
 
           {vetoStats && vetoStats.total > 0 && (
@@ -4418,8 +4454,11 @@ export default function REELmunity() {
       const raw = await store.get("nol-state-v1");
       let parsed = null;
       if (raw) { try { parsed = JSON.parse(raw); } catch { parsed = null; } }
+      // Backfill: anyone who already has committed picks before this feature existed
+      // is clearly not "new" — don't let them get logged as a first-time user later.
+      const alreadyActive = !!(parsed && parsed.spins && parsed.spins.committed > 0);
       setState(parsed
-        ? { night: null, services: [...ALL_SERVICES], handle: "", vetoesLeft: 2, notifications: [], notifSeen: { trending: [], svc: {} }, nightLog: [], ...parsed }
+        ? { night: null, services: [...ALL_SERVICES], handle: "", vetoesLeft: 2, notifications: [], notifSeen: { trending: [], svc: {} }, nightLog: [], everSpun: alreadyActive, ...parsed }
         : SEED);
       loaded.current = true;
     })();
