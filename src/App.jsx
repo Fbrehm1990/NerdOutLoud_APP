@@ -220,6 +220,22 @@ const cloud = (() => {
       const c = ready(); if (!c) return;
       try { await c.from("nol_pageviews").insert({ path: (window.location.pathname || "/").slice(0, 200) }); } catch { /* ignore */ }
     },
+    // How many vetoes people actually burn before committing to a pick — helps
+    // answer "would raising the veto limit actually help, or is 2 already plenty?"
+    async logVetoUsage(vetoesUsed) {
+      const c = ready(); if (!c) return;
+      try { await c.from("nol_veto_stats").insert({ vetoes_used: vetoesUsed }); } catch { /* ignore */ }
+    },
+    async getVetoStats() {
+      const c = ready(); if (!c) return null;
+      try {
+        const { data, error } = await c.from("nol_veto_stats").select("vetoes_used").limit(10000);
+        if (error) return null;
+        const counts = { 0: 0, 1: 0, 2: 0 };
+        (data || []).forEach(r => { if (r.vetoes_used in counts) counts[r.vetoes_used]++; });
+        return { ...counts, total: (data || []).length };
+      } catch { return null; }
+    },
     async getPageviewCount() {
       const c = ready(); if (!c) return null;
       try {
@@ -2889,6 +2905,8 @@ function Picker({ state, setState, user }) {
   const commit = async () => {
     if (!display) return;
     if (!display.__manual && !services.includes(display.svc)) return;
+    const vetoesUsed = 2 - (state.vetoesLeft != null ? state.vetoesLeft : 2);
+    cloud.logVetoUsage(vetoesUsed); // fire-and-forget, doesn't block the actual commit
     let finalDisplay = display;
     // Live discover picks carry placeholder runtime/director — fetch the real thing before locking it in.
     if (display.__live && display.tmdbId) {
@@ -3829,12 +3847,13 @@ function GatePage({ what, onSignup, onSignin }) {
 function AdminPage() {
   const [stats, setStats] = useState(null);
   const [members, setMembers] = useState(null);
+  const [vetoStats, setVetoStats] = useState(null);
 
   useEffect(() => {
     if (!cloud.enabled()) return;
     let on = true;
     (async () => {
-      const [visits, visits7, visits30, accounts, lobby, chats, recent] = await Promise.all([
+      const [visits, visits7, visits30, accounts, lobby, chats, recent, vetoes] = await Promise.all([
         cloud.getPageviewCount(),
         cloud.getPageviewsSince(7),
         cloud.getPageviewsSince(30),
@@ -3842,10 +3861,12 @@ function AdminPage() {
         cloud.getLobbyStats(),
         cloud.getChatCount(),
         cloud.recentMembers(8),
+        cloud.getVetoStats(),
       ]);
       if (!on) return;
       setStats({ visits, visits7, visits30, accounts, lobby, chats });
       setMembers(recent);
+      setVetoStats(vetoes);
     })();
     return () => { on = false; };
   }, []);
@@ -3877,6 +3898,34 @@ function AdminPage() {
             <p style={{ color: C.faint, fontSize: 11, textAlign: "center", marginTop: -14, marginBottom: 20 }}>
               Comment/rating/reaction counts are from the most recent 5,000 lobby posts.
             </p>
+          )}
+
+          {vetoStats && vetoStats.total > 0 && (
+            <Panel title="Veto usage per commit" right={`${vetoStats.total} nights tracked`}>
+              <p style={{ color: C.faint, fontSize: 12, margin: "0 0 14px", lineHeight: 1.5 }}>
+                How many vetoes people burn before committing to a pick — useful for deciding
+                whether 2 vetoes is already enough, or people are running out and settling.
+              </p>
+              {[0, 1, 2].map(n => {
+                const count = vetoStats[n] || 0;
+                const pct = Math.round((count / vetoStats.total) * 100);
+                return (
+                  <div key={n} style={{ marginBottom: 10 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.muted, marginBottom: 4 }}>
+                      <span>{n} veto{n === 1 ? "" : "es"} used</span>
+                      <span>{pct}% ({count})</span>
+                    </div>
+                    <div style={{ height: 8, background: C.bg, borderRadius: 4, overflow: "hidden" }}>
+                      <div style={{ width: `${pct}%`, height: "100%", background: n === 2 ? C.red : n === 1 ? C.amber : C.green }} />
+                    </div>
+                  </div>
+                );
+              })}
+              <p style={{ color: C.faint, fontSize: 11, marginTop: 12, lineHeight: 1.5 }}>
+                A high share of "2 vetoes used" (red) suggests people are hitting the ceiling and
+                might benefit from a 3rd veto. Mostly "0 used" (green) suggests 2 is already generous.
+              </p>
+            </Panel>
           )}
 
           {members && members.length > 0 && (
