@@ -467,6 +467,44 @@ const tmdb = {
     }
     return items;
   },
+  // TMDB's /movie/upcoming is built entirely around theatrical release calendars —
+  // everything in it already has a theatrical date by definition, so there's nothing
+  // genuinely streaming-only to sort out of that list. Streaming-bound titles need
+  // their own query: discover films whose *digital* release date (type 4) is still
+  // ahead of today, which is a real, separate calendar TMDB tracks.
+  async upcomingStreamList() {
+    const cacheKey = "nol-tmdb-upcoming-stream-v1";
+    try {
+      const cached = await store.get(cacheKey);
+      if (cached) {
+        const { day, items } = JSON.parse(cached);
+        if (day === new Date().toDateString()) return items;
+      }
+    } catch { /* refetch */ }
+    const today = new Date().toISOString().slice(0, 10);
+    const in90 = new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10);
+    let all = [];
+    try {
+      for (let page = 1; page <= 5; page++) {
+        const r = await fetch(tmdbProxy("/discover/movie", {
+          region: "US", with_release_type: "4", "release_date.gte": today, "release_date.lte": in90,
+          sort_by: "popularity.desc", include_adult: "false", page: String(page),
+        }));
+        if (!r.ok) break;
+        const j = await r.json();
+        all = all.concat(j.results || []);
+        if (page >= (j.total_pages || 1)) break;
+      }
+    } catch { /* use whatever we got */ }
+    const items = all.map(m => ({
+      n: m.title || "Untitled", y: m.release_date ? Number(m.release_date.slice(0, 4)) : new Date().getFullYear(),
+      poster: m.poster_path || null, tmdbId: m.id, syn: (m.overview || "").slice(0, 200),
+    }));
+    if (items.length) {
+      try { await store.set(cacheKey, JSON.stringify({ day: new Date().toDateString(), items })); } catch { /* ignore */ }
+    }
+    return items;
+  },
   async upcomingIds() {
     const items = await tmdb.upcomingList();
     return new Set(items.map(m => m.tmdbId));
@@ -2310,8 +2348,9 @@ function TheaterPosterGrid({ items, badge, badgeColor, onOverview, onTrailer, on
 
 function TheatersPage() {
   const [nowPlaying, setNowPlaying] = useState(null);
-  const [upcoming, setUpcoming] = useState(null);
-  const [comingSoonInfo, setComingSoonInfo] = useState(null); // null = still sorting, {} once done
+  const [upcomingTheatrical, setUpcomingTheatrical] = useState(null);
+  const [upcomingStream, setUpcomingStream] = useState(null);
+  const [streamSvcInfo, setStreamSvcInfo] = useState({});
   const [tab, setTab] = useState("now");
   const [theaterFilm, setTheaterFilm] = useState(null);
   const [theaterMode, setTheaterMode] = useState(null);
@@ -2320,39 +2359,38 @@ function TheatersPage() {
     if (!tmdb.enabled()) return;
     let on = true;
     tmdb.nowPlayingList().then(items => { if (on) setNowPlaying(items); }).catch(() => { if (on) setNowPlaying([]); });
-    tmdb.upcomingList().then(items => { if (on) setUpcoming(items); }).catch(() => { if (on) setUpcoming([]); });
+    tmdb.upcomingList().then(items => { if (on) setUpcomingTheatrical(items); }).catch(() => { if (on) setUpcomingTheatrical([]); });
+    tmdb.upcomingStreamList().then(items => { if (on) setUpcomingStream(items); }).catch(() => { if (on) setUpcomingStream([]); });
     return () => { on = false; };
   }, []);
 
-  // Once the Coming Soon list is in, classify every title as bound for a real
-  // theatrical release or not, so the page can split them into two honest groups
-  // instead of mixing "opening in theaters" with "streaming-only" together.
+  // Which service each upcoming streaming title is headed to, so the badge can say
+  // "Streaming on Netflix" instead of just "coming soon" — fetched only for this
+  // smaller, already-correctly-filtered list, not the whole catalog.
   useEffect(() => {
-    if (!upcoming || !upcoming.length) return;
+    if (!upcomingStream || !upcomingStream.length) return;
     let on = true;
-    setComingSoonInfo(null);
     (async () => {
       const info = {};
       const BATCH = 6;
-      for (let i = 0; i < upcoming.length; i += BATCH) {
+      for (let i = 0; i < upcomingStream.length; i += BATCH) {
         if (!on) return;
-        const batch = upcoming.slice(i, i + BATCH);
-        const results = await Promise.all(batch.map(t => tmdb.streamingInfo(t.tmdbId).catch(() => ({ svc: null, date: null, hasTheatrical: false }))));
+        const batch = upcomingStream.slice(i, i + BATCH);
+        const results = await Promise.all(batch.map(t => tmdb.streamingInfo(t.tmdbId).catch(() => ({ svc: null, date: null }))));
         batch.forEach((t, j) => { info[t.tmdbId] = results[j]; });
+        setStreamSvcInfo(prev => ({ ...prev, ...info }));
       }
-      if (on) setComingSoonInfo(info);
     })();
     return () => { on = false; };
-  }, [upcoming && upcoming.map(t => t.tmdbId).join(",")]);
+  }, [upcomingStream && upcomingStream.map(t => t.tmdbId).join(",")]);
 
   const openOverview = (t) => { setTheaterFilm(t); setTheaterMode("overview"); };
   const openTrailer = (t) => { setTheaterFilm(t); setTheaterMode("trailer"); };
   const openTickets = (t) => { setTheaterFilm(t); setTheaterMode("tickets"); };
   const openRelease = (t) => { setTheaterFilm(t); setTheaterMode("release"); };
 
-  const list = tab === "now" ? nowPlaying : upcoming;
-  const theatrical = (upcoming && comingSoonInfo) ? upcoming.filter(t => comingSoonInfo[t.tmdbId] && comingSoonInfo[t.tmdbId].hasTheatrical) : [];
-  const streamOnly = (upcoming && comingSoonInfo) ? upcoming.filter(t => !(comingSoonInfo[t.tmdbId] && comingSoonInfo[t.tmdbId].hasTheatrical)) : [];
+  const comingCount = (upcomingTheatrical && upcomingStream) ? upcomingTheatrical.length + upcomingStream.length : null;
+  const list = tab === "now" ? nowPlaying : (upcomingTheatrical && upcomingStream ? [...upcomingTheatrical, ...upcomingStream] : null);
 
   return (
     <div className="nol-fade" style={{ maxWidth: 900, margin: "0 auto", padding: "0 16px 40px" }}>
@@ -2364,7 +2402,7 @@ function TheatersPage() {
           Playing now {nowPlaying ? `· ${nowPlaying.length}` : ""}
         </button>
         <button className={`nol-seg${tab === "coming" ? " on" : ""}`} onClick={() => setTab("coming")}>
-          Coming soon {upcoming ? `· ${upcoming.length}` : ""}
+          Coming soon {comingCount != null ? `· ${comingCount}` : ""}
         </button>
       </div>
 
@@ -2376,31 +2414,27 @@ function TheatersPage() {
           onOverview={openOverview} onTrailer={openTrailer} onThird={openTickets} thirdLabel="Buy Tickets" />
       )}
 
-      {tab === "coming" && list && list.length > 0 && (
-        comingSoonInfo === null ? (
-          <p style={{ color: C.faint, textAlign: "center", padding: 30 }}>Sorting theatrical releases from streaming-only titles…</p>
-        ) : (
-          <>
-            {theatrical.length > 0 && (
-              <div style={{ marginBottom: 32 }}>
-                <div style={{ fontSize: 13, letterSpacing: "0.15em", textTransform: "uppercase", color: C.amber, marginBottom: 14, textAlign: "center" }}>
-                  Coming soon to a theatre near you
-                </div>
-                <TheaterPosterGrid items={theatrical} badge="COMING SOON" badgeColor={C.green} streamInfo={comingSoonInfo}
-                  onOverview={openOverview} onTrailer={openTrailer} onThird={openRelease} thirdLabel="Release Date" />
+      {tab === "coming" && upcomingTheatrical && upcomingStream && (
+        <>
+          {upcomingTheatrical.length > 0 && (
+            <div style={{ marginBottom: 32 }}>
+              <div style={{ fontSize: 13, letterSpacing: "0.15em", textTransform: "uppercase", color: C.amber, marginBottom: 14, textAlign: "center" }}>
+                Coming soon to a theatre near you
               </div>
-            )}
-            {streamOnly.length > 0 && (
-              <div>
-                <div style={{ fontSize: 13, letterSpacing: "0.15em", textTransform: "uppercase", color: C.green, marginBottom: 14, textAlign: "center" }}>
-                  Coming soon to stream
-                </div>
-                <TheaterPosterGrid items={streamOnly} badge="COMING SOON" badgeColor={C.green} streamInfo={comingSoonInfo}
-                  onOverview={openOverview} onTrailer={openTrailer} onThird={openRelease} thirdLabel="Release Date" />
+              <TheaterPosterGrid items={upcomingTheatrical} badge="COMING SOON" badgeColor={C.green}
+                onOverview={openOverview} onTrailer={openTrailer} onThird={openRelease} thirdLabel="Release Date" />
+            </div>
+          )}
+          {upcomingStream.length > 0 && (
+            <div>
+              <div style={{ fontSize: 13, letterSpacing: "0.15em", textTransform: "uppercase", color: C.green, marginBottom: 14, textAlign: "center" }}>
+                Coming soon to stream
               </div>
-            )}
-          </>
-        )
+              <TheaterPosterGrid items={upcomingStream} badge="COMING SOON" badgeColor={C.green} streamInfo={streamSvcInfo}
+                onOverview={openOverview} onTrailer={openTrailer} onThird={openRelease} thirdLabel="Release Date" />
+            </div>
+          )}
+        </>
       )}
 
       {theaterFilm && theaterMode === "overview" && <OverviewModal film={theaterFilm} onClose={() => setTheaterMode(null)} />}
