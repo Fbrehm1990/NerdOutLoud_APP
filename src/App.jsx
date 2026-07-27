@@ -440,7 +440,7 @@ const tmdb = {
   },
   // Same pattern, for films that haven't opened in theaters yet.
   async upcomingList() {
-    const cacheKey = "nol-tmdb-upcoming-v3";
+    const cacheKey = "nol-tmdb-upcoming-v4";
     try {
       const cached = await store.get(cacheKey);
       if (cached) {
@@ -448,10 +448,21 @@ const tmdb = {
         if (day === new Date().toDateString()) return items;
       }
     } catch { /* refetch */ }
+    // /movie/upcoming includes titles for loose reasons (re-releases, anniversary
+    // screenings) while still reporting each film's ORIGINAL release date on the
+    // object — that's how decades-old classics like a 1971 film were sneaking in
+    // and sorting to the very top. Querying discover with an explicit theatrical
+    // release-type + date window (same reliable approach as the streaming list)
+    // only returns films with a genuinely upcoming theatrical date.
+    const today = new Date().toISOString().slice(0, 10);
+    const in90 = new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10);
     let all = [];
     try {
       for (let page = 1; page <= 5; page++) {
-        const r = await fetch(tmdbProxy("/movie/upcoming", { region: "US", page: String(page) }));
+        const r = await fetch(tmdbProxy("/discover/movie", {
+          region: "US", with_release_type: "2|3", "release_date.gte": today, "release_date.lte": in90,
+          sort_by: "primary_release_date.asc", include_adult: "false", page: String(page),
+        }));
         if (!r.ok) break;
         const j = await r.json();
         all = all.concat(j.results || []);
