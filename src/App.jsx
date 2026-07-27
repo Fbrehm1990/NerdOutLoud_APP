@@ -488,7 +488,7 @@ const tmdb = {
   // TMDB's release_dates carry a "type" per country (4 = Digital/streaming release),
   // separate from the theatrical date already shown elsewhere. Cached per film per day.
   async streamingInfo(id) {
-    const cacheKey = "nol-tmdb-streaminfo-v2-" + id;
+    const cacheKey = "nol-tmdb-streaminfo-v3-" + id;
     try {
       const cached = await store.get(cacheKey);
       if (cached) {
@@ -502,8 +502,11 @@ const tmdb = {
       const svc = tmdbSvc(d["watch/providers"]);
       const usEntry = ((d.release_dates && d.release_dates.results) || []).find(r => r.iso_3166_1 === "US");
       const allUsDates = usEntry ? usEntry.release_dates : [];
-      // type 2 = Theatrical (limited), type 3 = Theatrical — either counts as a real theatrical release.
-      const hasTheatrical = allUsDates.some(rd => rd.type === 2 || rd.type === 3);
+      // Only type 3 (wide theatrical) counts as "really coming to a theatre near you."
+      // Type 2 (limited) alone is excluded on purpose — many streaming-exclusive films
+      // still get a token one-week qualifying run in a few cities for awards eligibility,
+      // and counting that would wrongly sweep pure streaming titles into the theatrical bucket.
+      const hasTheatrical = allUsDates.some(rd => rd.type === 3);
       const digitalEntries = allUsDates.filter(rd => rd.type === 4);
       const digitalDate = digitalEntries.length
         ? digitalEntries.map(rd => rd.release_date).sort()[0].slice(0, 10)
