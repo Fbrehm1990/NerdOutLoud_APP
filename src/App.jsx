@@ -381,13 +381,15 @@ const tmdb = {
   },
   // Which movies are currently playing in US theaters — used to tell "still in
   // theaters" apart from "already streaming" in the trending strip.
-  async nowPlayingIds() {
-    const cacheKey = "nol-tmdb-nowplaying-v2";
+  // Full film data for what's in theaters — powers both the trending-strip badge
+  // matching (via nowPlayingIds below) and the dedicated "In Theaters" page.
+  async nowPlayingList() {
+    const cacheKey = "nol-tmdb-nowplaying-v3";
     try {
       const cached = await store.get(cacheKey);
       if (cached) {
-        const { day, ids } = JSON.parse(cached);
-        if (day === new Date().toDateString()) return new Set(ids);
+        const { day, items } = JSON.parse(cached);
+        if (day === new Date().toDateString()) return items;
       }
     } catch { /* refetch */ }
     // One page is only 20 titles — there are usually 50-100+ movies actually in
@@ -402,20 +404,27 @@ const tmdb = {
         if (page >= (j.total_pages || 1)) break;
       }
     } catch { /* use whatever we got */ }
-    const ids = all.map(m => m.id);
-    if (ids.length) {
-      try { await store.set(cacheKey, JSON.stringify({ day: new Date().toDateString(), ids })); } catch { /* ignore */ }
+    const items = all.map(m => ({
+      n: m.title || "Untitled", y: m.release_date ? Number(m.release_date.slice(0, 4)) : new Date().getFullYear(),
+      poster: m.poster_path || null, tmdbId: m.id, syn: (m.overview || "").slice(0, 200),
+    }));
+    if (items.length) {
+      try { await store.set(cacheKey, JSON.stringify({ day: new Date().toDateString(), items })); } catch { /* ignore */ }
     }
-    return new Set(ids);
+    return items;
   },
-  // Same pattern as nowPlayingIds, for films that haven't opened in theaters yet.
-  async upcomingIds() {
-    const cacheKey = "nol-tmdb-upcoming-v1";
+  async nowPlayingIds() {
+    const items = await tmdb.nowPlayingList();
+    return new Set(items.map(m => m.tmdbId));
+  },
+  // Same pattern, for films that haven't opened in theaters yet.
+  async upcomingList() {
+    const cacheKey = "nol-tmdb-upcoming-v2";
     try {
       const cached = await store.get(cacheKey);
       if (cached) {
-        const { day, ids } = JSON.parse(cached);
-        if (day === new Date().toDateString()) return new Set(ids);
+        const { day, items } = JSON.parse(cached);
+        if (day === new Date().toDateString()) return items;
       }
     } catch { /* refetch */ }
     let all = [];
@@ -428,11 +437,18 @@ const tmdb = {
         if (page >= (j.total_pages || 1)) break;
       }
     } catch { /* use whatever we got */ }
-    const ids = all.map(m => m.id);
-    if (ids.length) {
-      try { await store.set(cacheKey, JSON.stringify({ day: new Date().toDateString(), ids })); } catch { /* ignore */ }
+    const items = all.map(m => ({
+      n: m.title || "Untitled", y: m.release_date ? Number(m.release_date.slice(0, 4)) : new Date().getFullYear(),
+      poster: m.poster_path || null, tmdbId: m.id, syn: (m.overview || "").slice(0, 200),
+    }));
+    if (items.length) {
+      try { await store.set(cacheKey, JSON.stringify({ day: new Date().toDateString(), items })); } catch { /* ignore */ }
     }
-    return new Set(ids);
+    return items;
+  },
+  async upcomingIds() {
+    const items = await tmdb.upcomingList();
+    return new Set(items.map(m => m.tmdbId));
   },
   // The official trailer (YouTube key) for a film, if TMDB has one on file.
   async trailerKey(id) {
@@ -803,9 +819,10 @@ input[type=range].nol-range::-moz-range-thumb { width: 18px; height: 18px; borde
 .nol-media-badges { display: flex; gap: 8px; flex-shrink: 0; }
 .nol-howitworks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .nol-trend-row { display: flex; gap: 12px; overflow-x: auto; padding: 4px 2px 10px; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: ${C.edge} transparent; }
+.nol-theater-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 16px; }
 .nol-trend-card { position: relative; flex: 0 0 108px; width: 108px; background: transparent; border: none; padding: 0; cursor: pointer; text-align: left; transition: transform 0.15s ease; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 .nol-theater-overlay {
-  position: absolute; top: 0; left: 0; right: 0; height: 156px; border-radius: 6px;
+  position: absolute; inset: 0; border-radius: 6px;
   background: rgba(5,6,14,0.88); display: flex; flex-direction: column; align-items: stretch;
   justify-content: center; gap: 6px; padding: 10px; opacity: 0; pointer-events: none;
   transition: opacity 0.15s ease;
@@ -1109,6 +1126,7 @@ function Menu({ open, close, go, view, nightActive, state, user }) {
   const isAdmin = !!(ADMIN_EMAIL && user && user.email && user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase());
   const items = [
     ["home", "Tonight's pick", nightActive ? "Movie night in progress" : "Spin, call it, watch, rate — all in one"],
+    ["theaters", "In Theaters", "Everything playing now and coming soon — overview, trailer, tickets"],
     ["board", gated ? "Nerdmunity — locked" : "Nerdmunity", gated ? "Create a free account to unlock the community and film lobbies" : "Talk movies with other patrons — rate, review, discuss"],
     ["library", gated ? "Library — locked" : "Library", gated ? "Create a free account to unlock your watchlist, ranking, and movie search" : "Your watchlist and your films, ranked by your rating"],
     ...(user
@@ -2165,6 +2183,105 @@ function ReleaseDateModal({ film, onClose }) {
         )}
       </div>
     </TheaterModalShell>
+  );
+}
+
+// ---------------- In Theaters: everything playing now and coming soon ----------------
+function TheaterPosterGrid({ items, badge, badgeColor, onOverview, onTrailer, onThird, thirdLabel }) {
+  const [revealedId, setRevealedId] = useState(null);
+  return (
+    <div className="nol-theater-grid">
+      {items.map(t => {
+        const revealed = revealedId === t.tmdbId;
+        return (
+          <div key={t.tmdbId} className="nol-trend-card nol-theater-card"
+            onClick={() => setRevealedId(revealed ? null : t.tmdbId)}
+            role="button" tabIndex={0} aria-label={`${t.n} — choose an option`}
+            style={{ width: "auto" }}>
+            {t.poster ? (
+              <img src={`https://image.tmdb.org/t/p/w185${t.poster}`} alt=""
+                style={{ width: "100%", height: 195, objectFit: "cover", borderRadius: 6, display: "block", boxShadow: "0 4px 14px rgba(0,0,0,0.45)" }} />
+            ) : (
+              <div style={{
+                width: "100%", height: 195, borderRadius: 6, background: C.panelHi,
+                display: "flex", alignItems: "center", justifyContent: "center", padding: 8,
+                boxShadow: "0 4px 14px rgba(0,0,0,0.45)",
+              }}>
+                <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 16, letterSpacing: 1, color: C.muted, textAlign: "center", lineHeight: 1.1 }}>{t.n}</span>
+              </div>
+            )}
+            <div style={{
+              position: "absolute", top: 6, right: 6, fontFamily: "'Bebas Neue', sans-serif",
+              fontSize: 10, letterSpacing: "0.05em", background: badgeColor, color: badgeColor === C.green ? "#0E2A1E" : C.paper,
+              borderRadius: 4, padding: "2px 6px 0", boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
+            }}>{badge}</div>
+            <div className={`nol-theater-overlay${revealed ? " revealed" : ""}`}>
+              <button className="nol-theater-opt" onClick={(e) => { e.stopPropagation(); onOverview(t); }}>Overview</button>
+              <button className="nol-theater-opt" onClick={(e) => { e.stopPropagation(); onTrailer(t); }}>Trailer</button>
+              <button className="nol-theater-opt" onClick={(e) => { e.stopPropagation(); onThird(t); }}>{thirdLabel}</button>
+            </div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginTop: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.n}</div>
+            <div style={{ fontSize: 11, color: C.faint }}>{t.y}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function TheatersPage() {
+  const [nowPlaying, setNowPlaying] = useState(null);
+  const [upcoming, setUpcoming] = useState(null);
+  const [tab, setTab] = useState("now");
+  const [theaterFilm, setTheaterFilm] = useState(null);
+  const [theaterMode, setTheaterMode] = useState(null);
+
+  useEffect(() => {
+    if (!tmdb.enabled()) return;
+    let on = true;
+    tmdb.nowPlayingList().then(items => { if (on) setNowPlaying(items); }).catch(() => { if (on) setNowPlaying([]); });
+    tmdb.upcomingList().then(items => { if (on) setUpcoming(items); }).catch(() => { if (on) setUpcoming([]); });
+    return () => { on = false; };
+  }, []);
+
+  const openOverview = (t) => { setTheaterFilm(t); setTheaterMode("overview"); };
+  const openTrailer = (t) => { setTheaterFilm(t); setTheaterMode("trailer"); };
+  const openTickets = (t) => { setTheaterFilm(t); setTheaterMode("tickets"); };
+  const openRelease = (t) => { setTheaterFilm(t); setTheaterMode("release"); };
+
+  const list = tab === "now" ? nowPlaying : upcoming;
+
+  return (
+    <div className="nol-fade" style={{ maxWidth: 900, margin: "0 auto", padding: "0 16px 40px" }}>
+      <SectionHead kicker="Now showing" title="In Theaters"
+        sub="Everything currently playing and coming soon — overview, trailer, and tickets, without hunting through the trending strip." />
+
+      <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
+        <button className={`nol-seg${tab === "now" ? " on" : ""}`} onClick={() => setTab("now")}>
+          Playing now {nowPlaying ? `· ${nowPlaying.length}` : ""}
+        </button>
+        <button className={`nol-seg${tab === "coming" ? " on" : ""}`} onClick={() => setTab("coming")}>
+          Coming soon {upcoming ? `· ${upcoming.length}` : ""}
+        </button>
+      </div>
+
+      {list === null && <p style={{ color: C.faint, textAlign: "center", padding: 30 }}>Loading…</p>}
+      {list && list.length === 0 && <p style={{ color: C.muted, textAlign: "center", padding: 30 }}>Nothing on file right now — check back soon.</p>}
+      {list && list.length > 0 && (
+        tab === "now" ? (
+          <TheaterPosterGrid items={list} badge="IN THEATERS" badgeColor={C.red}
+            onOverview={openOverview} onTrailer={openTrailer} onThird={openTickets} thirdLabel="Buy Tickets" />
+        ) : (
+          <TheaterPosterGrid items={list} badge="COMING SOON" badgeColor={C.green}
+            onOverview={openOverview} onTrailer={openTrailer} onThird={openRelease} thirdLabel="Release Date" />
+        )
+      )}
+
+      {theaterFilm && theaterMode === "overview" && <OverviewModal film={theaterFilm} onClose={() => setTheaterMode(null)} />}
+      {theaterFilm && theaterMode === "trailer" && <TrailerModal film={theaterFilm} onClose={() => setTheaterMode(null)} />}
+      {theaterFilm && theaterMode === "tickets" && <TicketsModal film={theaterFilm} onClose={() => setTheaterMode(null)} />}
+      {theaterFilm && theaterMode === "release" && <ReleaseDateModal film={theaterFilm} onClose={() => setTheaterMode(null)} />}
+    </div>
   );
 }
 
@@ -3999,6 +4116,7 @@ export default function NerdOutLoud() {
               <Picker state={state} setState={setState} user={user} />
               {!gated && <TrackRecord state={state} setState={setState} user={user} />}
             </>)}
+        {view === "theaters" && <TheatersPage />}
         {view === "board" && (gated
           ? <GatePage what="Nerdmunity — chat, discussions, and the film lobbies" onSignup={goSignup} onSignin={goSignin} />
           : <BoardPage state={state} setState={setState} user={user} goAccount={() => setView("account")} jumpFilmId={jumpFilmId} clearJump={() => setJumpFilmId(null)} />)}
