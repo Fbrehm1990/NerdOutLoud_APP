@@ -440,7 +440,7 @@ const tmdb = {
   },
   // Same pattern, for films that haven't opened in theaters yet.
   async upcomingList() {
-    const cacheKey = "nol-tmdb-upcoming-v5";
+    const cacheKey = "nol-tmdb-upcoming-v6";
     try {
       const cached = await store.get(cacheKey);
       if (cached) {
@@ -468,6 +468,11 @@ const tmdb = {
 
     const today = new Date().toISOString().slice(0, 10);
     const cutoff = new Date(Date.now() + 180 * 86400000).toISOString().slice(0, 10);
+    // A film's overall (primary) release date being more than ~2 years old is a strong
+    // signal this "upcoming" theatrical entry is actually an anniversary or revival
+    // screening (Willy Wonka, Train to Busan, etc. all get these), not a new release —
+    // even though the screening date itself is technically real and in the future.
+    const twoYearsAgo = new Date(Date.now() - 2 * 365 * 86400000).toISOString().slice(0, 10);
     const verified = [];
     const BATCH = 6;
     for (let i = 0; i < candidates.length; i += BATCH) {
@@ -475,6 +480,7 @@ const tmdb = {
       const results = await Promise.all(batch.map(async (m) => {
         try {
           const d = await tmdb.filmDetails(m.id);
+          if (d.release_date && d.release_date.slice(0, 10) < twoYearsAgo) return null;
           const usEntry = ((d.release_dates && d.release_dates.results) || []).find(r => r.iso_3166_1 === "US");
           const theatricalDates = usEntry
             ? usEntry.release_dates
