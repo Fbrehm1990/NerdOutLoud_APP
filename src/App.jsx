@@ -4232,6 +4232,7 @@ export default function REELmunity() {
   const [members, setMembers] = useState([]);
   const loaded = useRef(false);
   const syncedFor = useRef(null);
+  const syncingRef = useRef(false);
   const stateRef = useRef(null);
   stateRef.current = state;
   const notifications = (state && state.notifications) || [];
@@ -4277,6 +4278,8 @@ export default function REELmunity() {
   useEffect(() => {
     if (!user || !state || syncedFor.current === user.id) return;
     syncedFor.current = user.id;
+    syncingRef.current = true; // pause the general save effect below until this merge finishes —
+    // otherwise it can race ahead and push a stale, pre-merge snapshot up to the cloud first.
     const localNotifs = state.notifications || [];
     const localFilms = state.films || [];
     const localSeen = state.notifSeen || { trending: [], svc: {} };
@@ -4314,11 +4317,13 @@ export default function REELmunity() {
           const combined = new Set([...(mergedSvcSeen[svc] || []), ...(localSeen.svc[svc] || [])]);
           mergedSvcSeen[svc] = Array.from(combined).slice(0, 300);
         });
+        syncingRef.current = false; // safe to let the general save effect resume now
         setState({
           ...SEED, ...remote, notifications: mergedNotifs, films: [...mergedFilms, ...onlyLocalFilms],
           notifSeen: { trending: mergedTrendingSeen, svc: mergedSvcSeen },
         });
       } else {
+        syncingRef.current = false;
         cloud.saveState(user.id, state);
       }
       if (finalHandle) cloud.upsertMember(user.id, finalHandle); // keeps the welcome spotlight in sync
@@ -4326,7 +4331,7 @@ export default function REELmunity() {
   }, [user, state == null]);
 
   useEffect(() => {
-    if (!loaded.current || !state) return;
+    if (!loaded.current || !state || syncingRef.current) return;
     store.set("nol-state-v1", JSON.stringify(state));
     if (user) {
       cloud.saveState(user.id, state);
