@@ -510,7 +510,7 @@ const tmdb = {
   // their own query: discover films whose *digital* release date (type 4) is still
   // ahead of today, which is a real, separate calendar TMDB tracks.
   async upcomingStreamList() {
-    const cacheKey = "nol-tmdb-upcoming-stream-v2";
+    const cacheKey = "nol-tmdb-upcoming-stream-v3";
     try {
       const cached = await store.get(cacheKey);
       if (cached) {
@@ -520,7 +520,8 @@ const tmdb = {
     } catch { /* refetch */ }
     const today = new Date().toISOString().slice(0, 10);
     const in90 = new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10);
-    let all = [];
+    const twoYearsAgo = new Date(Date.now() - 2 * 365 * 86400000).toISOString().slice(0, 10);
+    let candidates = [];
     try {
       for (let page = 1; page <= 5; page++) {
         const r = await fetch(tmdbProxy("/discover/movie", {
@@ -529,20 +530,45 @@ const tmdb = {
         }));
         if (!r.ok) break;
         const j = await r.json();
-        all = all.concat(j.results || []);
+        candidates = candidates.concat(j.results || []);
         if (page >= (j.total_pages || 1)) break;
       }
     } catch { /* use whatever we got */ }
-    const items = all.map(m => ({
-      n: m.title || "Untitled", y: m.release_date ? Number(m.release_date.slice(0, 4)) : new Date().getFullYear(),
-      poster: m.poster_path || null, tmdbId: m.id, syn: (m.overview || "").slice(0, 200),
-      releaseDate: m.release_date || null,
-    }));
-    items.sort((a, b) => (a.releaseDate || "9999-99-99").localeCompare(b.releaseDate || "9999-99-99"));
-    if (items.length) {
-      try { await store.set(cacheKey, JSON.stringify({ day: new Date().toDateString(), items })); } catch { /* ignore */ }
+
+    // Same fix as the theatrical list: verify each candidate directly against its
+    // real release_dates rather than trusting discover's bulk filter, and exclude
+    // old films whose digital "upcoming" date is actually a re-issue/anniversary
+    // release rather than a genuinely new streaming premiere.
+    const verified = [];
+    const BATCH = 6;
+    for (let i = 0; i < candidates.length; i += BATCH) {
+      const batch = candidates.slice(i, i + BATCH);
+      const results = await Promise.all(batch.map(async (m) => {
+        try {
+          const d = await tmdb.filmDetails(m.id);
+          if (d.release_date && d.release_date.slice(0, 10) < twoYearsAgo) return null;
+          const usEntry = ((d.release_dates && d.release_dates.results) || []).find(r => r.iso_3166_1 === "US");
+          const digitalDates = usEntry
+            ? usEntry.release_dates
+                .filter(rd => rd.type === 4 && rd.release_date)
+                .map(rd => rd.release_date.slice(0, 10))
+                .filter(dt => dt >= today && dt <= in90)
+            : [];
+          if (!digitalDates.length) return null;
+          const soonest = digitalDates.sort()[0];
+          return {
+            n: m.title || "Untitled", y: Number(soonest.slice(0, 4)), poster: m.poster_path || null,
+            tmdbId: m.id, syn: (m.overview || "").slice(0, 200), releaseDate: soonest,
+          };
+        } catch { return null; }
+      }));
+      results.forEach(r => { if (r) verified.push(r); });
     }
-    return items;
+    verified.sort((a, b) => a.releaseDate.localeCompare(b.releaseDate));
+    if (verified.length) {
+      try { await store.set(cacheKey, JSON.stringify({ day: new Date().toDateString(), items: verified })); } catch { /* ignore */ }
+    }
+    return verified;
   },
   async upcomingIds() {
     const items = await tmdb.upcomingList();
