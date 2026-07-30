@@ -32,9 +32,20 @@ function RouteFallback() {
   );
 }
 
+// Maps internal view state to public-facing, shareable URL hashes. Keeps the
+// internal "board" key (used throughout the codebase already) separate from
+// the public-facing "lobby" URL slug, since the feature is branded The Lobby.
+const VIEW_TO_HASH = { home: "", theaters: "theaters", board: "lobby", library: "library", account: "account", admin: "admin", legal: "legal" };
+const HASH_TO_VIEW = Object.fromEntries(Object.entries(VIEW_TO_HASH).map(([v, h]) => [h, v]));
+
+function viewFromHash() {
+  const hash = window.location.hash.replace(/^#/, "");
+  return HASH_TO_VIEW[hash] || "home";
+}
+
 export default function REELmunity() {
   const [state, setState] = useState(null);
-  const [view, setView] = useState("home");
+  const [view, setView] = useState(viewFromHash);
   const [legalTab, setLegalTab] = useState("terms");
   const [menuOpen, setMenuOpen] = useState(false);
   const [user, setUser] = useState(null);
@@ -43,6 +54,29 @@ export default function REELmunity() {
   const [jumpFilmId, setJumpFilmId] = useState(null);
   const [members, setMembers] = useState([]);
   const loaded = useRef(false);
+
+  // Keep the URL in sync with the current view — lets people bookmark, share,
+  // or use the browser back/forward buttons to move between sections, and
+  // gives ad sitelinks a real, distinct destination to point to instead of
+  // every link landing on the same homepage regardless of which was clicked.
+  useEffect(() => {
+    const targetHash = VIEW_TO_HASH[view] ?? "";
+    const currentHash = window.location.hash.replace(/^#/, "");
+    if (currentHash !== targetHash) {
+      const url = targetHash ? `#${targetHash}` : window.location.pathname + window.location.search;
+      window.history.pushState(null, "", url);
+    }
+  }, [view]);
+
+  useEffect(() => {
+    const onHashChange = () => setView(viewFromHash());
+    window.addEventListener("hashchange", onHashChange);
+    window.addEventListener("popstate", onHashChange);
+    return () => {
+      window.removeEventListener("hashchange", onHashChange);
+      window.removeEventListener("popstate", onHashChange);
+    };
+  }, []);
   const syncedFor = useRef(null);
   const syncingRef = useRef(false);
   const stateRef = useRef(null);
@@ -192,13 +226,32 @@ export default function REELmunity() {
       if (!notif) {
         const f = myFilms.find(x => slugify(x.n) === row.film_slug && (x.status === "watched" || x.rating != null));
         if (f) {
-          const sub = row.body ? row.body : (row.rating != null ? `Rated it ${Number(row.rating).toFixed(1)}` : "");
-          notif = { type: "comment", title: `${row.handle} commented on ${f.n}`, sub, filmSlug: row.film_slug };
+          const hasText = !!row.body;
+          const title = hasText ? `${row.handle} commented on ${f.n}` : `${row.handle} rated ${f.n}`;
+          const sub = hasText ? row.body : (row.rating != null ? `${Number(row.rating).toFixed(1)} / 10` : "");
+          notif = { type: hasText ? "comment" : "rating", title, sub, filmSlug: row.film_slug };
         }
       }
       if (notif) pushNotification(notif);
     };
     const off = cloud.subscribeLobby(onInsert);
+    return off;
+  }, [user]);
+
+  // Live notifications: someone reacted to a post of yours. Reuses the same
+  // events table analytics already writes to — see subscribeReactions in
+  // supabaseClient.js for why (avoids a whole new table just for this).
+  useEffect(() => {
+    if (!cloud.enabled() || !user) return;
+    const off = cloud.subscribeReactions((row) => {
+      const meta = row && row.meta;
+      if (!meta || meta.postOwnerId !== user.id) return;
+      pushNotification({
+        type: "reaction",
+        title: `${meta.reactorHandle || "Someone"} reacted ${meta.emoji || ""} to your post`,
+        sub: "", filmSlug: meta.filmSlug,
+      });
+    });
     return off;
   }, [user]);
 
@@ -272,7 +325,7 @@ export default function REELmunity() {
       const f = state.films.find(f2 => slugify(f2.n) === n.filmSlug);
       if (f) { setJumpFilmId(f.id); setView("board"); return; }
     }
-    setView(n.type === "reply" || n.type === "comment" ? "board" : "home");
+    setView(n.type === "reply" || n.type === "comment" || n.type === "rating" || n.type === "reaction" ? "board" : "home");
   };
 
   if (!state) {

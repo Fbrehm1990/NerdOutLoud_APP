@@ -129,6 +129,18 @@ export const cloud = (() => {
         return () => { try { c.removeChannel(channel); } catch { /* ignore */ } };
       } catch { return () => {}; }
     },
+    // Reuses the same nol_events table already built for analytics — a reaction
+    // is just another event, so this avoids needing a new table or a database-level
+    // REPLICA IDENTITY change just to diff old/new reaction counts on every update.
+    subscribeReactions(onInsert) {
+      const c = ready(); if (!c) return () => {};
+      try {
+        const channel = c.channel("nol_reactions_live")
+          .on("postgres_changes", { event: "INSERT", schema: "public", table: "nol_events", filter: "event_type=eq.reaction" }, (payload) => onInsert(payload.new))
+          .subscribe();
+        return () => { try { c.removeChannel(channel); } catch { /* ignore */ } };
+      } catch { return () => {}; }
+    },
     async getCommentOwner(id) {
       const c = ready(); if (!c) return null;
       try {

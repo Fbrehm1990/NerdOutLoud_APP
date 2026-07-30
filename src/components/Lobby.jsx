@@ -109,6 +109,11 @@ export function Lobby({ film, handle, saveHandle, user, goAccount, setFilmPoster
     store.set(mineKey, JSON.stringify(nextMine));
     if (cloud.enabled()) {
       cloud.react(m.id, nextReactions);
+      // Only notify on a genuine new reaction (not removing one), and never
+      // notify someone for reacting to their own post.
+      if (!already && m.uid && (!user || m.uid !== user.id)) {
+        cloud.logEvent("reaction", { postOwnerId: m.uid, emoji, reactorHandle: (user && handle) || name.trim() || "Anonymous patron", filmSlug: slugify(film.n) });
+      }
     } else {
       try {
         const raw = await store.getShared(key);
