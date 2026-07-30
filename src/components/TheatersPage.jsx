@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { cloud } from "../lib/supabaseClient.js";
 import { tmdb } from "../lib/tmdb.js";
 import { C } from "../lib/constants.js";
 import { SectionHead } from "./Shared.jsx";
@@ -149,7 +150,7 @@ export function TheatersPage() {
                 <div style={{ width: 70, height: 3, background: C.amber, borderRadius: 2, margin: "8px auto 0", boxShadow: "0 0 10px rgba(255,182,39,0.6)" }} />
               </div>
               <TheaterPosterGrid items={upcomingTheatrical} badge="COMING SOON" badgeColor={C.green}
-                onOverview={openOverview} onTrailer={openTrailer} onThird={openRelease} thirdLabel="Release Date" />
+                onOverview={openOverview} onTrailer={openTrailer} onThird={openTickets} thirdLabel="Buy Tickets" />
             </div>
           )}
           {upcomingStream.length > 0 && (
