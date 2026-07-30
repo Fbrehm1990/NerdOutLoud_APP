@@ -330,7 +330,7 @@ export function Stat({ label, value, accent }) {
       padding: "12px 22px 10px", textAlign: "center", minWidth: 110, boxShadow: "0 4px 14px rgba(0,0,0,0.3)",
     }}>
       <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 30, color: accent || C.text, lineHeight: 1 }}>{value}</div>
-      <div style={{ fontSize: 10, letterSpacing: "0.22em", textTransform: "uppercase", color: C.faint, marginTop: 6 }}>{label}</div>
+      <div style={{ fontSize: 10, letterSpacing: "0.22em", textTransform: "uppercase", color: C.muted, marginTop: 6 }}>{label}</div>
     </div>
   );
 }

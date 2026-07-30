@@ -49,8 +49,8 @@ export const GLOBAL_CSS = `
 .nol-popcorn-wrap { flex-shrink: 0; display: flex; align-items: flex-end; }
 @media (max-width: 720px) { .nol-popcorn-wrap { transform: scale(0.52); transform-origin: bottom center; margin: 0 -34px; } }
 input[type=range].nol-range { -webkit-appearance: none; appearance: none; height: 4px; border-radius: 2px; background: ${C.edge}; cursor: pointer; }
-input[type=range].nol-range::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: ${C.amber}; border: 2px solid #14120A; box-shadow: 0 0 8px rgba(255,182,39,0.5); }
-input[type=range].nol-range::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: ${C.amber}; border: 2px solid #14120A; }
+input[type=range].nol-range::-webkit-slider-thumb { -webkit-appearance: none; width: 24px; height: 24px; border-radius: 50%; background: ${C.amber}; border: 2px solid #14120A; box-shadow: 0 0 8px rgba(255,182,39,0.5); }
+input[type=range].nol-range::-moz-range-thumb { width: 24px; height: 24px; border-radius: 50%; background: ${C.amber}; border: 2px solid #14120A; }
 .nol-dual-range { position: relative; height: 22px; display: flex; align-items: center; }
 .nol-dual-range .track-bg { position: absolute; left: 0; right: 0; height: 4px; border-radius: 2px; background: ${C.edge}; }
 .nol-dual-range .track-fill { position: absolute; height: 4px; border-radius: 2px; background: ${C.amber}; }
@@ -58,8 +58,8 @@ input[type=range].nol-range::-moz-range-thumb { width: 18px; height: 18px; borde
 .nol-dual-range input[type=range]:active, .nol-dual-range input[type=range]:focus { z-index: 3; }
 .nol-dual-range input[type=range]::-webkit-slider-runnable-track { background: transparent; height: 22px; }
 .nol-dual-range input[type=range]::-moz-range-track { background: transparent; height: 22px; }
-.nol-dual-range input[type=range]::-webkit-slider-thumb { pointer-events: auto; -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: ${C.amber}; border: 2px solid #14120A; box-shadow: 0 0 8px rgba(255,182,39,0.5); cursor: pointer; margin-top: 0; }
-.nol-dual-range input[type=range]::-moz-range-thumb { pointer-events: auto; width: 18px; height: 18px; border-radius: 50%; background: ${C.amber}; border: 2px solid #14120A; cursor: pointer; }
+.nol-dual-range input[type=range]::-webkit-slider-thumb { pointer-events: auto; -webkit-appearance: none; width: 24px; height: 24px; border-radius: 50%; background: ${C.amber}; border: 2px solid #14120A; box-shadow: 0 0 8px rgba(255,182,39,0.5); cursor: pointer; margin-top: 0; }
+.nol-dual-range input[type=range]::-moz-range-thumb { pointer-events: auto; width: 24px; height: 24px; border-radius: 50%; background: ${C.amber}; border: 2px solid #14120A; cursor: pointer; }
 @media (prefers-reduced-motion: reduce) { .nol-bulb, .nol-fade { animation: none !important; } .nol-ticket:hover, .nol-btn:hover, .nol-source:hover { transform: none; } }
 .nol-btn, .nol-ghost, .nol-chip, .nol-seg, .nol-source, .nol-ticket, .nol-burger, .nol-menu-item { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 @media (pointer: coarse) {

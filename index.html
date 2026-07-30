@@ -39,6 +39,38 @@
     <link rel="icon" type="image/png" sizes="64x64" href="/favicon-64.png" />
     <link rel="apple-touch-icon" href="/logo-mark-512.png" />
 
+    <!-- Structured data: describes the site itself, not any specific movie
+         (this is a single-page app with no per-title crawlable content). -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "WebSite",
+          "@id": "https://reelmunity.com/#website",
+          "name": "REELmunity",
+          "url": "https://reelmunity.com",
+          "description": "We pick your movie. You call your rating. The Lobby settles the debate."
+        },
+        {
+          "@type": "WebApplication",
+          "@id": "https://reelmunity.com/#webapp",
+          "name": "REELmunity",
+          "url": "https://reelmunity.com",
+          "description": "REELmunity picks your movie, takes your before-and-after ratings, and gets you talking about it in The Lobby — the community that settles the debate.",
+          "applicationCategory": "EntertainmentApplication",
+          "operatingSystem": "Any",
+          "image": "https://reelmunity.com/promo-static-1200x630.png",
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+          }
+        }
+      ]
+    }
+    </script>
+
     <!--
       ============ Google Search Console ============
       Get your verification snippet from search.google.com/search-console

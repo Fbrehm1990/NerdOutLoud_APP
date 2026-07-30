@@ -164,3 +164,27 @@ To turn it on:
 
 Once live, any error caught by the app's Error Boundary (`src/components/ErrorBoundary.jsx`)
 gets reported automatically, along with the component stack that crashed.
+
+## Google Ads conversion tracking (optional)
+
+Tracks two moments: a genuinely new user's first spin, and a completed
+signup — see `.env.example` for the three variables and `src/lib/googleAds.js`
+for exactly what fires when. Completely optional; unset, no tracking script
+loads at all, zero added weight.
+
+To turn it on:
+1. In Google Ads: **Goals → Conversions → New conversion action**. Create one
+   for "first spin" (the strongest "the ad worked" signal available) and
+   optionally one for "signup". Website conversion type, no specific value
+   needed unless you want one.
+2. Google gives you a **Conversion ID** (shared across all your conversion
+   actions, looks like `AW-123456789`) and a separate **Conversion Label**
+   per action (looks like `AbC-D_efG-h12_34-567`).
+3. Set `VITE_GOOGLE_ADS_ID`, `VITE_GOOGLE_ADS_SPIN_LABEL`, and/or
+   `VITE_GOOGLE_ADS_SIGNUP_LABEL` in Netlify's environment variables.
+4. Trigger a fresh deploy — same as any other env var, Vite reads these at
+   build time.
+
+You can set up just the first-spin conversion and leave the signup one
+unconfigured — each is independent; whichever labels are set are the ones
+that fire.

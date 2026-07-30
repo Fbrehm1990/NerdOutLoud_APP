@@ -5,6 +5,7 @@ import { ALL_SERVICES, TRENDING, CATALOG, NO_SYN, C, MOODS } from "../lib/consta
 import { slugify, calStats, computeStreak, tasteProfile, weightedPick, postToLobby } from "../lib/utils.js";
 import { SectionHead, Stat, RatingSlider, DualRangeSlider } from "./Shared.jsx";
 import { TrendingStrip, OverviewModal, TrailerModal, TicketsModal, ReleaseDateModal } from "./TheaterFeatures.jsx";
+import { trackFirstSpinConversion } from "../lib/googleAds.js";
 
 export function Picker({ state, setState, user }) {
   const [source, setSource] = useState("taste");
@@ -202,6 +203,7 @@ export function Picker({ state, setState, user }) {
     cloud.logEvent("spin", { source });
     if (!state.everSpun) {
       cloud.logEvent("new_user_first_spin", {});
+      trackFirstSpinConversion();
       setState(s => ({ ...s, everSpun: true }));
     }
     setPhase("spinning");
@@ -350,7 +352,8 @@ export function Picker({ state, setState, user }) {
       <div className="nol-filter-grid" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 20, alignItems: "flex-end" }}>
         <div style={{ flex: "1 1 140px", minWidth: 130 }}>
           <div style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, marginBottom: 8 }}>Genre</div>
-          <select className="nol-input" value={mood} onChange={e => setMood(e.target.value)} disabled={locked} style={{ cursor: "pointer" }}>
+          <select className="nol-input" value={mood} onChange={e => setMood(e.target.value)} disabled={locked} style={{ cursor: "pointer" }}
+            aria-label="Genre filter">
             <option value="any">All genres</option>
             {Object.entries(MOODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
@@ -360,7 +363,8 @@ export function Picker({ state, setState, user }) {
             Max runtime — <span style={{ color: C.text }}>{maxRt} min</span>
           </div>
           <input type="range" className="nol-range" min="85" max="185" step="5" value={maxRt}
-            onChange={e => setMaxRt(Number(e.target.value))} disabled={locked} style={{ width: "100%" }} />
+            onChange={e => setMaxRt(Number(e.target.value))} disabled={locked} style={{ width: "100%" }}
+            aria-label={`Maximum runtime, currently ${maxRt} minutes`} />
         </div>
         <div style={{ flex: "1 1 140px", minWidth: 130 }}>
           <div style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, marginBottom: 8 }}>
@@ -371,7 +375,8 @@ export function Picker({ state, setState, user }) {
         </div>
         <div style={{ flex: "0 1 108px", minWidth: 100 }}>
           <div style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, marginBottom: 8 }}>Rating</div>
-          <select className="nol-input" value={contentRating} onChange={e => setContentRating(e.target.value)} disabled={locked} style={{ cursor: "pointer", padding: "10px 8px" }}>
+          <select className="nol-input" value={contentRating} onChange={e => setContentRating(e.target.value)} disabled={locked} style={{ cursor: "pointer", padding: "10px 8px" }}
+            aria-label="Content rating filter">
             <option value="any">Any</option>
             <option value="G">G</option>
             <option value="PG">PG</option>

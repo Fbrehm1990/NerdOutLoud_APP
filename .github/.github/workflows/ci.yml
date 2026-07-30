@@ -1,0 +1,46 @@
+name: CI
+
+# Runs alongside Netlify's own build/deploy (which stays untouched — this
+# workflow doesn't deploy anything, it's a separate quality gate). Netlify
+# builds and deploys on every push to main regardless of what happens here;
+# this exists to catch test failures and performance/accessibility/SEO
+# regressions in pull requests before they merge.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  lighthouse:
+    name: Lighthouse budgets
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run lighthouse
+        env:
+          # Real TMDB_KEY/OMDB_KEY aren't available in this environment on
+          # purpose — see README's "Environment variables" section. The app
+          # is built to degrade gracefully without them, which is exactly
+          # what's being exercised here: Lighthouse audits the page as a
+          # real first-time visitor without a working backend would see it.
+          LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}

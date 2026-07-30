@@ -7,7 +7,9 @@
   "background_color": "#0D0F1E",
   "theme_color": "#0D0F1E",
   "icons": [
+    { "src": "/logo-mark-512.webp", "sizes": "512x512", "type": "image/webp", "purpose": "any" },
     { "src": "/logo-mark-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/logo-mark-1024.webp", "sizes": "1024x1024", "type": "image/webp", "purpose": "any" },
     { "src": "/logo-mark-1024.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any" }
   ]
 }

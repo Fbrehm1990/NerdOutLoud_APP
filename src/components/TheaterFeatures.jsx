@@ -30,7 +30,7 @@ export function TrendingStrip({ items, live, onPick, theaterIds, upcomingIds, on
                 if (!special) { onPick(t, i + 1); return; }
                 setRevealedId(revealed ? null : (t.tid || t.n));
               }}
-              role="button" tabIndex={0} aria-label={special ? `${t.n} — choose an option` : `Pick ${t.n}`}>
+              role="button" tabIndex={0} aria-label={t.n}>
               {t.poster ? (
                 <img src={`https://image.tmdb.org/t/p/w185${t.poster}`} alt=""
                   style={{ width: "100%", height: 156, objectFit: "cover", borderRadius: 6, display: "block", boxShadow: "0 4px 14px rgba(0,0,0,0.45)" }} />

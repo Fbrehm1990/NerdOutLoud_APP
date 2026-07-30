@@ -3,6 +3,7 @@ import { store } from "../lib/store.js";
 import { ADMIN_EMAIL, cloud } from "../lib/supabaseClient.js";
 import { C } from "../lib/constants.js";
 import { SectionHead, Panel, Stat } from "./Shared.jsx";
+import { trackSignupConversion } from "../lib/googleAds.js";
 
 // ---------------- Admin analytics — visible only to ADMIN_EMAIL ----------------
 export function AdminPage() {
@@ -346,6 +347,7 @@ export function AccountPage({ user, onDone, initialMode, handle, saveHandle }) {
         await persistEmailChoice(email.trim());
         if (mode === "signup") {
           if (uname.trim()) saveHandle(uname.trim().slice(0, 24));
+          trackSignupConversion();
           setMsg("Account created. If your email needs confirming, check your inbox — then sign in.");
         }
         else onDone();
