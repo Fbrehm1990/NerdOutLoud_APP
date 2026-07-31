@@ -11,6 +11,7 @@ export function BoardPage({ state, setState, user, goAccount, jumpFilmId, clearJ
   const [expandedId, setExpandedId] = useState(jumpFilmId || null);
   const [pulse, setPulse] = useState(null);
   const [communityRatings, setCommunityRatings] = useState(null);
+  const [commentCounts, setCommentCounts] = useState(null);
   const [searchQ, setSearchQ] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -28,6 +29,7 @@ export function BoardPage({ state, setState, user, goAccount, jumpFilmId, clearJ
   const refreshCommunity = () => {
     if (!cloud.enabled()) return;
     cloud.loadCommunityRatings(300).then(rows => { if (rows) setCommunityRatings(rows); }).catch(() => { /* quiet */ });
+    cloud.loadCommentCounts().then(rows => { if (rows) setCommentCounts(rows); }).catch(() => { /* quiet */ });
   };
 
   useEffect(() => {
@@ -35,11 +37,14 @@ export function BoardPage({ state, setState, user, goAccount, jumpFilmId, clearJ
     let on = true;
     cloud.recentLobby().then(rows => { if (on && rows) setPulse(rows); }).catch(() => { /* quiet */ });
     cloud.loadCommunityRatings(300).then(rows => { if (on && rows) setCommunityRatings(rows); }).catch(() => { /* quiet */ });
+    cloud.loadCommentCounts().then(rows => { if (on && rows) setCommentCounts(rows); }).catch(() => { /* quiet */ });
     return () => { on = false; };
   }, []);
 
   const communityBySlug = {};
   (communityRatings || []).forEach(row => { communityBySlug[row.slug] = row; });
+  const commentCountBySlug = {};
+  (commentCounts || []).forEach(row => { commentCountBySlug[row.slug] = row.comment_count; });
 
   // Merge your own library with any community-rated films you don't have locally yet,
   // so The Lobby's ranking reflects everyone, not just what happens to be in your library.
@@ -184,6 +189,7 @@ export function BoardPage({ state, setState, user, goAccount, jumpFilmId, clearJ
       }}>
         {allFilms.map((f, i) => {
           const cr = communityBySlug[slugify(f.n)];
+          const commentCount = commentCountBySlug[slugify(f.n)] || 0;
           const hasRank = cr != null || f.rating != null;
           const isExpanded = !f.__synthetic && expandedId === f.id;
           return (
@@ -230,24 +236,32 @@ export function BoardPage({ state, setState, user, goAccount, jumpFilmId, clearJ
                     </div>
                   )}
                 </div>
-                {(cr || f.rating != null) && (
-                  <div className="nol-media-badges">
-                    {cr && (
-                      <div style={{ textAlign: "center", minWidth: 42 }}>
-                        <div style={{ fontSize: 8, letterSpacing: "0.08em", textTransform: "uppercase", color: C.faint, whiteSpace: "nowrap" }}>User Ranking</div>
-                        <div style={{
-                          fontFamily: "'Bebas Neue', sans-serif", fontSize: 20, color: C.amber,
-                          textShadow: "0 0 10px rgba(255,182,39,0.3)", lineHeight: 1.1,
-                        }}>{Number(cr.avg_rating).toFixed(1)}</div>
-                        <div style={{ fontSize: 9, color: C.faint }}>{cr.rating_count} rating{cr.rating_count === 1 ? "" : "s"}</div>
-                      </div>
-                    )}
-                    {f.rating != null && (
-                      <div style={{ textAlign: "center", minWidth: 42 }}>
-                        <div style={{ fontSize: 8, letterSpacing: "0.08em", textTransform: "uppercase", color: C.faint, whiteSpace: "nowrap" }}>My Ranking</div>
-                        <div style={{
-                          fontFamily: "'Bebas Neue', sans-serif", fontSize: 20, color: C.green, lineHeight: 1.1,
-                        }}>{f.rating.toFixed(1)}</div>
+                {(cr || f.rating != null || commentCount > 0) && (
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                    <div className="nol-media-badges">
+                      {cr && (
+                        <div style={{ textAlign: "center", minWidth: 42 }}>
+                          <div style={{ fontSize: 8, letterSpacing: "0.08em", textTransform: "uppercase", color: C.faint, whiteSpace: "nowrap" }}>User Ranking</div>
+                          <div style={{
+                            fontFamily: "'Bebas Neue', sans-serif", fontSize: 20, color: C.amber,
+                            textShadow: "0 0 10px rgba(255,182,39,0.3)", lineHeight: 1.1,
+                          }}>{Number(cr.avg_rating).toFixed(1)}</div>
+                          <div style={{ fontSize: 9, color: C.faint }}>{cr.rating_count} rating{cr.rating_count === 1 ? "" : "s"}</div>
+                        </div>
+                      )}
+                      {f.rating != null && (
+                        <div style={{ textAlign: "center", minWidth: 42 }}>
+                          <div style={{ fontSize: 8, letterSpacing: "0.08em", textTransform: "uppercase", color: C.faint, whiteSpace: "nowrap" }}>My Ranking</div>
+                          <div style={{
+                            fontFamily: "'Bebas Neue', sans-serif", fontSize: 20, color: C.green, lineHeight: 1.1,
+                          }}>{f.rating.toFixed(1)}</div>
+                        </div>
+                      )}
+                    </div>
+                    {commentCount > 0 && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 10, color: C.faint }}>
+                        <span>💬</span>
+                        <span>{commentCount}</span>
                       </div>
                     )}
                   </div>

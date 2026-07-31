@@ -334,6 +334,17 @@ export const cloud = (() => {
         return data || [];
       } catch { return null; }
     },
+    // Separate from ratings on purpose — a "comment" here specifically means a
+    // post with real text, not just a bare star rating, matching the same
+    // rated-vs-commented distinction the notification wording already uses.
+    async loadCommentCounts() {
+      const c = ready(); if (!c) return null;
+      try {
+        const { data, error } = await c.from("nol_comment_counts").select("slug,comment_count");
+        if (error) return null;
+        return data || [];
+      } catch { return null; }
+    },
   };
 })();
 
