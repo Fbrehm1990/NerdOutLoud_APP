@@ -335,12 +335,31 @@ export function Stat({ label, value, accent }) {
   );
 }
 
+function emojiForRating(v) {
+  if (v < 2) return "🤮";
+  if (v < 3) return "😖";
+  if (v < 4) return "😕";
+  if (v < 5) return "😐";
+  if (v < 6) return "🙂";
+  if (v < 7) return "😊";
+  if (v < 8) return "😃";
+  if (v < 9) return "🤩";
+  return "🔥";
+}
+
 export function RatingSlider({ value, onChange, color }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
-      <input type="range" className="nol-range" min="1" max="10" step="0.5" value={value}
-        onChange={e => onChange(Number(e.target.value))} style={{ flex: "1 1 160px", maxWidth: 260 }} />
-      <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 30, color: color || C.amber, width: 48 }}>{value.toFixed(1)}</span>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
+        <span style={{ fontSize: 18 }} title="1 = worst">🤮</span>
+        <input type="range" className="nol-range" min="1" max="10" step="0.5" value={value}
+          onChange={e => onChange(Number(e.target.value))} style={{ flex: "1 1 160px", maxWidth: 260 }} />
+        <span style={{ fontSize: 18 }} title="10 = best">🔥</span>
+        <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 24 }}>{emojiForRating(value)}</span>
+          <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 30, color: color || C.amber, width: 48 }}>{value.toFixed(1)}</span>
+        </span>
+      </div>
     </div>
   );
 }
