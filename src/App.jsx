@@ -79,6 +79,7 @@ export default function REELmunity() {
   }, []);
   const syncedFor = useRef(null);
   const syncingRef = useRef(false);
+  const [syncSettled, setSyncSettled] = useState(false);
   const stateRef = useRef(null);
   stateRef.current = state;
   const notifications = (state && state.notifications) || [];
@@ -125,10 +126,12 @@ export default function REELmunity() {
 
   // When a user signs in: pull their cloud state if it exists, otherwise seed it with local state.
   useEffect(() => {
-    if (!user || !state || syncedFor.current === user.id) return;
+    if (!user) { setSyncSettled(true); return; } // local mode — no sync will ever happen, don't block digests on it
+    if (!state || syncedFor.current === user.id) return;
     syncedFor.current = user.id;
     syncingRef.current = true; // pause the general save effect below until this merge finishes —
     // otherwise it can race ahead and push a stale, pre-merge snapshot up to the cloud first.
+    setSyncSettled(false); // a fresh sync is starting — digests must wait for this one too, not reuse an earlier "settled" from before this sign-in
     const localNotifs = state.notifications || [];
     const localFilms = state.films || [];
     const localSeen = state.notifSeen || { trending: [], svc: {} };
@@ -176,6 +179,9 @@ export default function REELmunity() {
         cloud.saveState(user.id, state);
       }
       if (finalHandle) cloud.upsertMember(user.id, finalHandle); // keeps the welcome spotlight in sync
+      // Only now is state guaranteed to reflect the true, merged "already seen" data —
+      // safe for the trending/service digest effects below to read it.
+      setSyncSettled(true);
     })();
   }, [user, state == null]);
 
@@ -216,6 +222,7 @@ export default function REELmunity() {
     const onInsert = async (row) => {
       if (!row || row.user_id === user.id) return;
       const myFilms = stateRef.current ? stateRef.current.films : [];
+      const isAdminUser = !!(ADMIN_EMAIL && user.email && user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase());
       let notif = null;
       if (row.parent_id) {
         const parent = await cloud.getCommentOwner(row.parent_id);
@@ -231,6 +238,15 @@ export default function REELmunity() {
           const sub = hasText ? row.body : (row.rating != null ? `${Number(row.rating).toFixed(1)} / 10` : "");
           notif = { type: hasText ? "comment" : "rating", title, sub, filmSlug: row.film_slug };
         }
+      }
+      // Admin sees every post site-wide, not just activity on films they've personally
+      // watched/rated — otherwise the site owner has no visibility into new patrons'
+      // activity on films that aren't in their own library.
+      if (!notif && isAdminUser) {
+        const hasText = !!row.body;
+        const title = hasText ? `${row.handle} commented (new patron activity)` : `${row.handle} rated a film`;
+        const sub = hasText ? row.body : (row.rating != null ? `${Number(row.rating).toFixed(1)} / 10` : "");
+        notif = { type: hasText ? "comment" : "rating", title, sub, filmSlug: row.film_slug };
       }
       if (notif) pushNotification(notif);
     };
@@ -259,7 +275,7 @@ export default function REELmunity() {
   // "Seen" tracking lives in synced account state now (not local-only storage), so it can't
   // get wiped by a storage reset and start re-announcing the same titles as "new" again.
   useEffect(() => {
-    if (!tmdb.enabled() || !state) return;
+    if (!tmdb.enabled() || !state || !syncSettled) return;
     (async () => {
       try {
         const items = await tmdb.trending();
@@ -280,11 +296,11 @@ export default function REELmunity() {
         setState(s => s ? { ...s, notifSeen: { ...(s.notifSeen || {}), trending: ids.slice(-200) } } : s);
       } catch { /* quiet */ }
     })();
-  }, [state == null]);
+  }, [syncSettled]);
 
   // Once per app load, per selected service: a digest of newly-appeared streaming titles.
   useEffect(() => {
-    if (!tmdb.enabled() || !state) return;
+    if (!tmdb.enabled() || !state || !syncSettled) return;
     const svcs = (state.services || []).filter(s => TMDB_PROVIDERS[s]);
     let cancelled = false;
     (async () => {
@@ -314,7 +330,7 @@ export default function REELmunity() {
       }
     })();
     return () => { cancelled = true; };
-  }, [state == null]);
+  }, [syncSettled]);
 
   const markAllRead = () => setState(s => s ? { ...s, notifications: (s.notifications || []).map(n => ({ ...n, read: true })) } : s);
   const clearAllNotifs = () => setState(s => s ? { ...s, notifications: [] } : s);
