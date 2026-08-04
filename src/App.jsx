@@ -167,7 +167,7 @@ export default function REELmunity() {
         const mergedSvcSeen = { ...(remoteSeen.svc || {}) };
         Object.keys(localSeen.svc || {}).forEach(svc => {
           const combined = new Set([...(mergedSvcSeen[svc] || []), ...(localSeen.svc[svc] || [])]);
-          mergedSvcSeen[svc] = Array.from(combined).slice(0, 300);
+          mergedSvcSeen[svc] = Array.from(combined).slice(0, 1200); // discoverByService can return up to 1,000 titles (MAX_PAGES*20) — this must stay comfortably above that or titles past the cap never get remembered as "seen" and re-announce forever
         });
         syncingRef.current = false; // safe to let the general save effect resume now
         setState({
@@ -324,7 +324,7 @@ export default function REELmunity() {
           }
           setState(s => s ? {
             ...s,
-            notifSeen: { ...(s.notifSeen || {}), svc: { ...((s.notifSeen && s.notifSeen.svc) || {}), [svc]: ids.slice(0, 300) } },
+            notifSeen: { ...(s.notifSeen || {}), svc: { ...((s.notifSeen && s.notifSeen.svc) || {}), [svc]: ids.slice(0, 1200) } },
           } : s);
         } catch { /* quiet, move to next service */ }
       }
