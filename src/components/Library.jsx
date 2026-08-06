@@ -214,15 +214,17 @@ export function Library({ state, setState, goToFilm }) {
             padding: "10px 16px", cursor: "pointer",
             borderBottom: i < list.length - 1 ? `1px solid ${C.edge}` : "none",
           }}>
-            <div style={{ position: "relative", flexShrink: 0 }}>
+            <div style={{ position: "relative", flexShrink: 0 }}
+              onClick={(e) => { e.stopPropagation(); setOverviewFilm(f); }}
+              title="Overview & cast">
               {f.poster ? (
                 <img src={`https://image.tmdb.org/t/p/w154${f.poster}`} alt=""
-                  style={{ width: 52, height: 78, objectFit: "cover", borderRadius: 5, display: "block", boxShadow: "0 4px 12px rgba(0,0,0,0.5)" }} />
+                  style={{ width: 52, height: 78, objectFit: "cover", borderRadius: 5, display: "block", boxShadow: "0 4px 12px rgba(0,0,0,0.5)", cursor: "pointer" }} />
               ) : (
                 <div style={{
                   width: 52, height: 78, borderRadius: 5, background: C.panelHi,
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  boxShadow: "0 4px 12px rgba(0,0,0,0.5)",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.5)", cursor: "pointer",
                 }}>
                   <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 20, color: C.faint }}>{f.n[0]}</span>
                 </div>
@@ -254,13 +256,10 @@ export function Library({ state, setState, goToFilm }) {
             <div className="nol-media-badges" style={{ alignItems: "center" }}>
               {f.rating != null && (
                 <span style={{
-                  fontFamily: "'Bebas Neue', sans-serif", fontSize: 22, color: C.amber,
+                  fontFamily: "'Bebas Neue', sans-serif", fontSize: 24, color: C.amber,
                   textShadow: "0 0 10px rgba(255,182,39,0.3)", flexShrink: 0,
                 }}>{f.rating.toFixed(1)}</span>
               )}
-              <span className="nol-ghost" style={{ flexShrink: 0, padding: "4px 8px", fontSize: 12, cursor: "pointer" }}
-                title="Overview & cast"
-                onClick={(e) => { e.stopPropagation(); setOverviewFilm(f); }}>ℹ️</span>
               <span className="nol-danger-link" style={{ flexShrink: 0 }}
                 onClick={(e) => { e.stopPropagation(); remove(f.id); }}>✕</span>
             </div>

@@ -201,15 +201,17 @@ export function BoardPage({ state, setState, user, goAccount, jumpFilmId, clearJ
                   padding: "10px 16px", cursor: "pointer",
                   borderBottom: isExpanded ? "none" : `1px solid ${C.edge}`,
                 }}>
-                <div style={{ position: "relative", flexShrink: 0 }}>
+                <div style={{ position: "relative", flexShrink: 0 }}
+                  onClick={f.__synthetic ? undefined : (e) => { e.stopPropagation(); setOverviewFilm(f); }}
+                  title={f.__synthetic ? undefined : "Overview & cast"}>
                   {f.poster ? (
                     <img src={`https://image.tmdb.org/t/p/w154${f.poster}`} alt=""
-                      style={{ width: 52, height: 78, objectFit: "cover", borderRadius: 5, display: "block", boxShadow: "0 4px 12px rgba(0,0,0,0.5)" }} />
+                      style={{ width: 52, height: 78, objectFit: "cover", borderRadius: 5, display: "block", boxShadow: "0 4px 12px rgba(0,0,0,0.5)", cursor: f.__synthetic ? "default" : "pointer" }} />
                   ) : (
                     <div style={{
                       width: 52, height: 78, borderRadius: 5, background: C.panelHi,
                       display: "flex", alignItems: "center", justifyContent: "center",
-                      boxShadow: "0 4px 12px rgba(0,0,0,0.5)",
+                      boxShadow: "0 4px 12px rgba(0,0,0,0.5)", cursor: f.__synthetic ? "default" : "pointer",
                     }}>
                       <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 20, color: C.faint }}>{f.n[0]}</span>
                     </div>
@@ -239,39 +241,32 @@ export function BoardPage({ state, setState, user, goAccount, jumpFilmId, clearJ
                   )}
                 </div>
                 {(cr || f.rating != null || commentCount > 0) && (
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-                    <div className="nol-media-badges">
-                      {cr && (
-                        <div style={{ textAlign: "center", minWidth: 48 }}>
-                          <div style={{ fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: C.muted, whiteSpace: "nowrap" }}>User Ranking</div>
-                          <div style={{
-                            fontFamily: "'Bebas Neue', sans-serif", fontSize: 24, color: C.amber,
-                            textShadow: "0 0 10px rgba(255,182,39,0.3)", lineHeight: 1.1,
-                          }}>{Number(cr.avg_rating).toFixed(1)}</div>
-                          <div style={{ fontSize: 11, color: C.muted }}>{cr.rating_count} rating{cr.rating_count === 1 ? "" : "s"}</div>
-                        </div>
-                      )}
-                      {f.rating != null && (
-                        <div style={{ textAlign: "center", minWidth: 48 }}>
-                          <div style={{ fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: C.muted, whiteSpace: "nowrap" }}>My Ranking</div>
-                          <div style={{
-                            fontFamily: "'Bebas Neue', sans-serif", fontSize: 24, color: C.green, lineHeight: 1.1,
-                          }}>{f.rating.toFixed(1)}</div>
-                        </div>
-                      )}
-                    </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                    {cr && (
+                      <div style={{ textAlign: "center", minWidth: 54 }}>
+                        <div style={{ fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: C.muted, whiteSpace: "nowrap" }}>User Ranking</div>
+                        <div style={{
+                          fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, color: C.amber,
+                          textShadow: "0 0 10px rgba(255,182,39,0.3)", lineHeight: 1.1,
+                        }}>{Number(cr.avg_rating).toFixed(1)}</div>
+                        <div style={{ fontSize: 12, color: C.muted }}>{cr.rating_count} rating{cr.rating_count === 1 ? "" : "s"}</div>
+                      </div>
+                    )}
+                    {f.rating != null && (
+                      <div style={{ textAlign: "center", minWidth: 54 }}>
+                        <div style={{ fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: C.muted, whiteSpace: "nowrap" }}>My Ranking</div>
+                        <div style={{
+                          fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, color: C.green, lineHeight: 1.1,
+                        }}>{f.rating.toFixed(1)}</div>
+                      </div>
+                    )}
                     {commentCount > 0 && (
-                      <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, color: C.muted }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 16, color: C.muted }}>
                         <span>💬</span>
                         <span>{commentCount}</span>
                       </div>
                     )}
                   </div>
-                )}
-                {!f.__synthetic && (
-                  <span className="nol-ghost" style={{ flexShrink: 0, padding: "4px 8px", fontSize: 12, cursor: "pointer" }}
-                    title="Overview & cast"
-                    onClick={(e) => { e.stopPropagation(); setOverviewFilm(f); }}>ℹ️</span>
                 )}
                 <span style={{ color: isExpanded ? C.amber : C.faint, fontSize: 12, flexShrink: 0 }}>
                   {isExpanded ? "▾" : "▸"}
