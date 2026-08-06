@@ -240,34 +240,33 @@ export function BoardPage({ state, setState, user, goAccount, jumpFilmId, clearJ
                     </div>
                   )}
                 </div>
-                {(cr || f.rating != null || commentCount > 0) && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                    {cr && (
-                      <div style={{ textAlign: "center", minWidth: 54 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 14, flexShrink: 0 }}>
+                  <div style={{ textAlign: "center", width: 60 }}>
+                    {cr ? (
+                      <>
                         <div style={{ fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: C.muted, whiteSpace: "nowrap" }}>User Ranking</div>
                         <div style={{
                           fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, color: C.amber,
                           textShadow: "0 0 10px rgba(255,182,39,0.3)", lineHeight: 1.1,
                         }}>{Number(cr.avg_rating).toFixed(1)}</div>
                         <div style={{ fontSize: 12, color: C.muted }}>{cr.rating_count} rating{cr.rating_count === 1 ? "" : "s"}</div>
-                      </div>
-                    )}
-                    {f.rating != null && (
-                      <div style={{ textAlign: "center", minWidth: 54 }}>
+                      </>
+                    ) : null}
+                  </div>
+                  <div style={{ textAlign: "center", width: 60 }}>
+                    {f.rating != null ? (
+                      <>
                         <div style={{ fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: C.muted, whiteSpace: "nowrap" }}>My Ranking</div>
                         <div style={{
                           fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, color: C.green, lineHeight: 1.1,
                         }}>{f.rating.toFixed(1)}</div>
-                      </div>
-                    )}
-                    {commentCount > 0 && (
-                      <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 16, color: C.muted }}>
-                        <span>💬</span>
-                        <span>{commentCount}</span>
-                      </div>
-                    )}
+                      </>
+                    ) : null}
                   </div>
-                )}
+                  <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 16, color: C.muted, width: 44 }}>
+                    {commentCount > 0 ? (<><span>💬</span><span>{commentCount}</span></>) : null}
+                  </div>
+                </div>
                 <span style={{ color: isExpanded ? C.amber : C.faint, fontSize: 12, flexShrink: 0 }}>
                   {isExpanded ? "▾" : "▸"}
                 </span>

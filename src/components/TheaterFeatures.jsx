@@ -111,12 +111,30 @@ export function TheaterModalShell({ onClose, children, width }) {
 
 export function OverviewModal({ film, onClose }) {
   const [details, setDetails] = useState(null);
+  const [failed, setFailed] = useState(false);
   useEffect(() => {
-    if (!film || !film.tmdbId) return;
+    if (!film) return;
     let on = true;
-    tmdb.filmDetails(film.tmdbId).then(d => { if (on) setDetails(d); }).catch(() => {});
+    setDetails(null);
+    setFailed(false);
+    (async () => {
+      try {
+        let id = film.tmdbId;
+        // Older library entries (added before this app tracked tmdbId on every
+        // saved film) won't have one — fall back to a live title+year search
+        // rather than leaving the modal stuck with nothing to show.
+        if (!id) {
+          const results = await tmdb.search(film.n);
+          const match = results.find(r => r.release_date && Number(r.release_date.slice(0, 4)) === film.y) || results[0];
+          id = match && match.id;
+        }
+        if (!id) { if (on) setFailed(true); return; }
+        const d = await tmdb.filmDetails(id);
+        if (on) setDetails(d);
+      } catch { if (on) setFailed(true); }
+    })();
     return () => { on = false; };
-  }, [film && film.tmdbId]);
+  }, [film && film.tmdbId, film && film.n]);
   if (!film) return null;
   const overview = (details && details.overview) || film.syn || "";
   const cast = (details && details.credits && details.credits.cast) || [];
@@ -131,6 +149,8 @@ export function OverviewModal({ film, onClose }) {
         </div>
         {overview ? (
           <p style={{ color: C.muted, fontSize: 14, lineHeight: 1.6, marginTop: 12 }}>{overview}</p>
+        ) : failed ? (
+          <p style={{ color: C.faint, fontSize: 13, marginTop: 12 }}>Couldn't find more details for this one.</p>
         ) : (
           <p style={{ color: C.faint, fontSize: 13, marginTop: 12 }}>Loading synopsis…</p>
         )}
