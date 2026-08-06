@@ -192,12 +192,12 @@ export function Lobby({ film, handle, saveHandle, user, goAccount, setFilmPoster
     if (m.sp && !revealed[m.id]) {
       return (
         <div className="nol-spoiler-wrap" onClick={() => setRevealed(r => ({ ...r, [m.id]: true }))} style={{ marginTop: 5 }}>
-          <div className="nol-spoiler-blur" style={{ color: C.muted, fontSize: 14, lineHeight: 1.5, padding: "6px 0" }}>{m.t}</div>
+          <div className="nol-spoiler-blur" style={{ color: C.muted, fontSize: 16, lineHeight: 1.6, padding: "6px 0" }}>{m.t}</div>
           <div className="nol-spoiler-tag">Spoiler — tap to reveal</div>
         </div>
       );
     }
-    return <div style={{ color: C.muted, fontSize: 14, marginTop: 3, lineHeight: 1.5 }}>{m.t}</div>;
+    return <div style={{ color: C.muted, fontSize: 16, marginTop: 3, lineHeight: 1.6 }}>{m.t}</div>;
   };
 
   const row = (m, isReply) => {
@@ -238,17 +238,17 @@ export function Lobby({ film, handle, saveHandle, user, goAccount, setFilmPoster
         <Avatar name={m.u} size={isReply ? 24 : 28} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
-            <span style={{ fontWeight: 700, fontSize: 13, color: C.text }}>{m.u}</span>
+            <span style={{ fontWeight: 700, fontSize: 15, color: C.text }}>{m.u}</span>
             {isAdmin && !owned && (
               <span style={{ fontSize: 9, letterSpacing: "0.1em", color: C.faint, border: `1px solid ${C.edge}`, borderRadius: 4, padding: "1px 5px" }}>MOD VIEW</span>
             )}
             {m.r != null && (
               <span style={{
-                fontFamily: "'Bebas Neue', sans-serif", fontSize: 13, color: "#14120A",
-                background: C.amber, borderRadius: 3, padding: "1px 7px 0",
+                fontFamily: "'Bebas Neue', sans-serif", fontSize: 15, color: "#14120A",
+                background: C.amber, borderRadius: 3, padding: "1px 8px 0",
               }}>{Number(m.r).toFixed(1)}</span>
             )}
-            <span style={{ fontSize: 11, color: C.faint }}>{m.ts ? new Date(m.ts).toLocaleDateString() : ""}</span>
+            <span style={{ fontSize: 12, color: C.faint }}>{m.ts ? new Date(m.ts).toLocaleDateString() : ""}</span>
             <div style={{ marginLeft: "auto", display: "flex", gap: 10 }}>
               {!isReply && !needSignIn && (
                 <span className="nol-danger-link" style={{ fontSize: 12 }} onClick={() => setReplyTo(m)}>Reply</span>

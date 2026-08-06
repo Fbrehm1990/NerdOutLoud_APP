@@ -83,14 +83,25 @@ export const cloud = (() => {
         });
       } catch { /* ignore */ }
     },
-    async recentLobby() {
+    async recentLobby(limit) {
       const c = ready(); if (!c) return null;
       try {
         const { data, error } = await c.from("nol_lobby")
-          .select("film_slug,handle,body,rating,created_at")
-          .order("created_at", { ascending: false }).limit(20);
+          .select("id,film_slug,handle,body,rating,parent_id,user_id,created_at")
+          .order("created_at", { ascending: false }).limit(limit || 20);
         if (error) return null;
         return data || [];
+      } catch { return null; }
+    },
+    // All of a user's own post IDs — used by the catch-up notification pass to
+    // check "is this missed comment a reply to something I posted" in one query
+    // instead of one lookup per candidate row.
+    async myLobbyIds(userId) {
+      const c = ready(); if (!c) return null;
+      try {
+        const { data, error } = await c.from("nol_lobby").select("id").eq("user_id", userId).limit(500);
+        if (error) return null;
+        return (data || []).map(r => r.id);
       } catch { return null; }
     },
     // Reactions are the one thing anyone signed in can update on someone else's comment —

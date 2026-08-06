@@ -6,12 +6,14 @@ import { slugify } from "../lib/utils.js";
 import { SectionHead, Panel } from "./Shared.jsx";
 import { Lobby } from "./Lobby.jsx";
 import { PatronBoard } from "./CommunityFeatures.jsx";
+import { OverviewModal } from "./TheaterFeatures.jsx";
 
 export function BoardPage({ state, setState, user, goAccount, jumpFilmId, clearJump }) {
   const [expandedId, setExpandedId] = useState(jumpFilmId || null);
   const [pulse, setPulse] = useState(null);
   const [communityRatings, setCommunityRatings] = useState(null);
   const [commentCounts, setCommentCounts] = useState(null);
+  const [overviewFilm, setOverviewFilm] = useState(null);
   const [searchQ, setSearchQ] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -227,11 +229,11 @@ export function BoardPage({ state, setState, user, goAccount, jumpFilmId, clearJ
                     fontFamily: "'Bebas Neue', sans-serif", fontSize: 21, letterSpacing: "0.05em",
                     color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                   }}>{f.n}</div>
-                  <div style={{ fontSize: 12, color: C.faint, marginTop: 2 }}>
+                  <div style={{ fontSize: 13, color: C.muted, marginTop: 2 }}>
                     {f.y}{f.d && f.d !== "Unknown" ? ` · dir. ${f.d}` : ""}
                   </div>
                   {!cr && f.rating == null && (
-                    <div style={{ fontFamily: "'Courier Prime', monospace", fontSize: 12, color: C.faint, marginTop: 5 }}>
+                    <div style={{ fontFamily: "'Courier Prime', monospace", fontSize: 13, color: C.muted, marginTop: 5 }}>
                       {f.__synthetic ? "rated by the community — tap to join in" : f.status === "watchlist" ? "on your watchlist" : "not yet rated"}
                     </div>
                   )}
@@ -240,31 +242,36 @@ export function BoardPage({ state, setState, user, goAccount, jumpFilmId, clearJ
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
                     <div className="nol-media-badges">
                       {cr && (
-                        <div style={{ textAlign: "center", minWidth: 42 }}>
-                          <div style={{ fontSize: 8, letterSpacing: "0.08em", textTransform: "uppercase", color: C.faint, whiteSpace: "nowrap" }}>User Ranking</div>
+                        <div style={{ textAlign: "center", minWidth: 48 }}>
+                          <div style={{ fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: C.muted, whiteSpace: "nowrap" }}>User Ranking</div>
                           <div style={{
-                            fontFamily: "'Bebas Neue', sans-serif", fontSize: 20, color: C.amber,
+                            fontFamily: "'Bebas Neue', sans-serif", fontSize: 24, color: C.amber,
                             textShadow: "0 0 10px rgba(255,182,39,0.3)", lineHeight: 1.1,
                           }}>{Number(cr.avg_rating).toFixed(1)}</div>
-                          <div style={{ fontSize: 9, color: C.faint }}>{cr.rating_count} rating{cr.rating_count === 1 ? "" : "s"}</div>
+                          <div style={{ fontSize: 11, color: C.muted }}>{cr.rating_count} rating{cr.rating_count === 1 ? "" : "s"}</div>
                         </div>
                       )}
                       {f.rating != null && (
-                        <div style={{ textAlign: "center", minWidth: 42 }}>
-                          <div style={{ fontSize: 8, letterSpacing: "0.08em", textTransform: "uppercase", color: C.faint, whiteSpace: "nowrap" }}>My Ranking</div>
+                        <div style={{ textAlign: "center", minWidth: 48 }}>
+                          <div style={{ fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: C.muted, whiteSpace: "nowrap" }}>My Ranking</div>
                           <div style={{
-                            fontFamily: "'Bebas Neue', sans-serif", fontSize: 20, color: C.green, lineHeight: 1.1,
+                            fontFamily: "'Bebas Neue', sans-serif", fontSize: 24, color: C.green, lineHeight: 1.1,
                           }}>{f.rating.toFixed(1)}</div>
                         </div>
                       )}
                     </div>
                     {commentCount > 0 && (
-                      <div style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 10, color: C.faint }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, color: C.muted }}>
                         <span>💬</span>
                         <span>{commentCount}</span>
                       </div>
                     )}
                   </div>
+                )}
+                {!f.__synthetic && (
+                  <span className="nol-ghost" style={{ flexShrink: 0, padding: "4px 8px", fontSize: 12, cursor: "pointer" }}
+                    title="Overview & cast"
+                    onClick={(e) => { e.stopPropagation(); setOverviewFilm(f); }}>ℹ️</span>
                 )}
                 <span style={{ color: isExpanded ? C.amber : C.faint, fontSize: 12, flexShrink: 0 }}>
                   {isExpanded ? "▾" : "▸"}
@@ -322,6 +329,7 @@ export function BoardPage({ state, setState, user, goAccount, jumpFilmId, clearJ
       )}
 
       <PatronBoard user={user} handle={state.handle} goAccount={goAccount} />
+      {overviewFilm && <OverviewModal film={overviewFilm} onClose={() => setOverviewFilm(null)} />}
     </div>
   );
 }

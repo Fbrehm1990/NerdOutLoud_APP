@@ -45,6 +45,7 @@ export function tmdbToFilm(d) {
     svc: tmdbSvc(d["watch/providers"]),
     syn: (d.overview || "").slice(0, 200),
     poster: d.poster_path || null,
+    tmdbId: d.id,
   };
 }
 

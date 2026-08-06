@@ -169,10 +169,15 @@ export default function REELmunity() {
           const combined = new Set([...(mergedSvcSeen[svc] || []), ...(localSeen.svc[svc] || [])]);
           mergedSvcSeen[svc] = Array.from(combined).slice(0, 1200); // discoverByService can return up to 1,000 titles (MAX_PAGES*20) — this must stay comfortably above that or titles past the cap never get remembered as "seen" and re-announce forever
         });
+        // Later timestamp wins — not a union, since this is a single cursor, not
+        // a list. Taking the later of the two avoids re-showing a catch-up batch
+        // that another device already saw, without ever skipping ahead further
+        // than either device has actually gotten to.
+        const mergedLastCheckedAt = [remoteSeen.lastCheckedAt, localSeen.lastCheckedAt].filter(Boolean).sort().pop() || null;
         syncingRef.current = false; // safe to let the general save effect resume now
         setState({
           ...SEED, ...remote, notifications: mergedNotifs, films: [...mergedFilms, ...onlyLocalFilms],
-          notifSeen: { trending: mergedTrendingSeen, svc: mergedSvcSeen },
+          notifSeen: { trending: mergedTrendingSeen, svc: mergedSvcSeen, lastCheckedAt: mergedLastCheckedAt },
         });
       } else {
         syncingRef.current = false;
@@ -253,6 +258,72 @@ export default function REELmunity() {
     const off = cloud.subscribeLobby(onInsert);
     return off;
   }, [user]);
+
+  // Catch-up pass: the live subscriptions above only fire while this tab is
+  // actually open at the exact moment something happens — genuinely useless
+  // for anyone who doesn't sit on the site 24/7. This runs once per load (after
+  // sync settles, same protection as the digests) and backfills notifications
+  // for anything that happened since the last time this ran, using the same
+  // relevance rules as the live version above (replies to you, activity on
+  // films you've watched/rated, or — if you're admin — everything site-wide).
+  useEffect(() => {
+    if (!cloud.enabled() || !user || !syncSettled) return;
+    (async () => {
+      const lastChecked = (stateRef.current && stateRef.current.notifSeen && stateRef.current.notifSeen.lastCheckedAt) || null;
+      const now = new Date().toISOString();
+      // First time this ever runs for someone: just establish the starting
+      // point rather than dumping their entire history on them as "new".
+      if (!lastChecked) {
+        setState(s => s ? { ...s, notifSeen: { ...(s.notifSeen || {}), lastCheckedAt: now } } : s);
+        return;
+      }
+      const isAdminUser = !!(ADMIN_EMAIL && user.email && user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase());
+      const myFilms = stateRef.current ? stateRef.current.films : [];
+      try {
+        const [lobbyRows, memberRows] = await Promise.all([
+          cloud.recentLobby(200),
+          cloud.recentMembers(50),
+        ]);
+        const missedLobby = (lobbyRows || [])
+          .filter(r => r.created_at > lastChecked && r.user_id !== user.id)
+          .sort((a, b) => a.created_at.localeCompare(b.created_at)); // oldest first, so the notification list ends up newest-first after pushing
+        if (missedLobby.length) {
+          // One batch query for "which of these are replies to something I posted",
+          // instead of a lookup per row — same information, far fewer round trips.
+          const myOwnIds = new Set((await cloud.myLobbyIds(user.id)) || []);
+          missedLobby.forEach(row => {
+            let notif = null;
+            if (row.parent_id && myOwnIds.has(row.parent_id)) {
+              notif = { type: "reply", title: `${row.handle} replied to your comment`, sub: row.body || "", filmSlug: row.film_slug };
+            }
+            if (!notif) {
+              const f = myFilms.find(x => slugify(x.n) === row.film_slug && (x.status === "watched" || x.rating != null));
+              if (f) {
+                const hasText = !!row.body;
+                const title = hasText ? `${row.handle} commented on ${f.n}` : `${row.handle} rated ${f.n}`;
+                const sub = hasText ? row.body : (row.rating != null ? `${Number(row.rating).toFixed(1)} / 10` : "");
+                notif = { type: hasText ? "comment" : "rating", title, sub, filmSlug: row.film_slug };
+              }
+            }
+            if (!notif && isAdminUser) {
+              const hasText = !!row.body;
+              const title = hasText ? `${row.handle} commented (new patron activity)` : `${row.handle} rated a film`;
+              const sub = hasText ? row.body : (row.rating != null ? `${Number(row.rating).toFixed(1)} / 10` : "");
+              notif = { type: hasText ? "comment" : "rating", title, sub, filmSlug: row.film_slug };
+            }
+            if (notif) pushNotification(notif);
+          });
+        }
+        const missedMembers = (memberRows || [])
+          .filter(r => r.joined_at > lastChecked)
+          .sort((a, b) => a.joined_at.localeCompare(b.joined_at));
+        missedMembers.forEach(row => {
+          pushNotification({ type: "member", title: `Welcome our newest patron: ${row.handle}`, sub: "Say hi in a lobby 🎬" });
+        });
+      } catch { /* quiet — next load tries again from the same lastCheckedAt */ return; }
+      setState(s => s ? { ...s, notifSeen: { ...(s.notifSeen || {}), lastCheckedAt: now } } : s);
+    })();
+  }, [user, syncSettled]);
 
   // Live notifications: someone reacted to a post of yours. Reuses the same
   // events table analytics already writes to — see subscribeReactions in

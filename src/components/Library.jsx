@@ -3,6 +3,7 @@ import { tmdbToFilm, tmdb } from "../lib/tmdb.js";
 import { ALL_SERVICES, C, MOODS } from "../lib/constants.js";
 import { SectionHead, Panel } from "./Shared.jsx";
 import { Lobby } from "./Lobby.jsx";
+import { OverviewModal } from "./TheaterFeatures.jsx";
 
 export function TmdbSearch({ state, setState }) {
   const [q, setQ] = useState("");
@@ -103,6 +104,7 @@ export function Library({ state, setState, goToFilm }) {
   const [tab, setTab] = useState("watchlist");
   const [query, setQuery] = useState("");
   const [addOpen, setAddOpen] = useState(false);
+  const [overviewFilm, setOverviewFilm] = useState(null);
 
   const add = () => {
     if (!form.n.trim()) return;
@@ -256,12 +258,16 @@ export function Library({ state, setState, goToFilm }) {
                   textShadow: "0 0 10px rgba(255,182,39,0.3)", flexShrink: 0,
                 }}>{f.rating.toFixed(1)}</span>
               )}
+              <span className="nol-ghost" style={{ flexShrink: 0, padding: "4px 8px", fontSize: 12, cursor: "pointer" }}
+                title="Overview & cast"
+                onClick={(e) => { e.stopPropagation(); setOverviewFilm(f); }}>ℹ️</span>
               <span className="nol-danger-link" style={{ flexShrink: 0 }}
                 onClick={(e) => { e.stopPropagation(); remove(f.id); }}>✕</span>
             </div>
           </div>
         ))}
       </div>
+      {overviewFilm && <OverviewModal film={overviewFilm} onClose={() => setOverviewFilm(null)} />}
     </div>
   );
 }
