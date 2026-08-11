@@ -148,16 +148,24 @@ export default function REELmunity() {
           .slice(0, 30);
         // Same protection for ratings: if a film was just rated locally and the cloud
         // hasn't caught up yet, don't let the stale remote copy wipe that rating back out.
+        //
+        // Matched by slug, not by id — id is just a locally-incrementing counter
+        // (nextId), so two independently-created states (e.g. this device's local
+        // data from before ever signing in, vs. the cloud copy from another device)
+        // can easily reach the same id for two completely different movies by pure
+        // coincidence. Matching by id there would silently swap their ratings. The
+        // slug is the film's actual identity — same one used everywhere else in the
+        // app (communityBySlug, commentCountBySlug) for exactly this reason.
         const remoteFilms = remote.films || [];
-        const remoteFilmIds = new Set(remoteFilms.map(f => f.id));
+        const remoteFilmSlugs = new Set(remoteFilms.map(f => slugify(f.n)));
         const mergedFilms = remoteFilms.map(rf => {
-          const lf = localFilms.find(x => x.id === rf.id);
+          const lf = localFilms.find(x => slugify(x.n) === slugify(rf.n));
           if (lf && lf.rating != null && rf.rating == null) {
             return { ...rf, rating: lf.rating, status: lf.status, note: lf.note || rf.note };
           }
           return rf;
         });
-        const onlyLocalFilms = localFilms.filter(f => !remoteFilmIds.has(f.id));
+        const onlyLocalFilms = localFilms.filter(f => !remoteFilmSlugs.has(slugify(f.n)));
         // Same protection for the "already told you about this" tracking — this is
         // the exact data that stops trending/service digests from repeating, so if
         // IT gets reverted to a stale copy, the app starts re-announcing things it
