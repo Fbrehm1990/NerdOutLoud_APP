@@ -263,25 +263,36 @@ export function Picker({ state, setState, user }) {
     if (!display) return;
     const ratingVal = withRating ? seenRating : null;
     const noteVal = withRating ? seenNote.trim() : "";
+    // Same fix commit() already applies: a live catalog pick carries placeholder
+    // director/runtime until the real details load — landedDetails is the same
+    // fetch already running for the card itself, just reused here so this path
+    // doesn't silently save "Unknown" into the library forever.
+    const realDir = landedDetails && landedDetails.credits && (landedDetails.credits.crew || []).find(c => c.job === "Director");
+    const finalDisplay = {
+      ...display,
+      d: (realDir && realDir.name) || display.d,
+      rt: (landedDetails && landedDetails.runtime) || display.rt,
+      syn: ((landedDetails && landedDetails.overview) || display.syn || "").slice(0, 200),
+    };
     setState(s => {
       let films = s.films, nextId = s.nextId;
-      const existing = films.find(f => f.n.toLowerCase() === display.n.toLowerCase());
+      const existing = films.find(f => f.n.toLowerCase() === finalDisplay.n.toLowerCase());
       if (existing) {
         films = films.map(f => f.id === existing.id
           ? { ...f, status: "watched", rating: ratingVal != null ? ratingVal : f.rating, note: noteVal || f.note }
           : f);
       } else {
         films = [...films, {
-          id: nextId, n: display.n, y: display.y, d: display.d, rt: display.rt,
-          mood: display.mood, svc: display.svc, status: "watched", elo: 1500, w: 0, l: 0,
-          rating: ratingVal, note: noteVal, syn: display.syn || "", poster: display.poster || null,
+          id: nextId, n: finalDisplay.n, y: finalDisplay.y, d: finalDisplay.d, rt: finalDisplay.rt,
+          mood: finalDisplay.mood, svc: finalDisplay.svc, status: "watched", elo: 1500, w: 0, l: 0,
+          rating: ratingVal, note: noteVal, syn: finalDisplay.syn || "", poster: finalDisplay.poster || null,
         }];
         nextId += 1;
       }
       return { ...s, films, nextId };
     });
     if (withRating) {
-      postToLobby(display, {
+      postToLobby(finalDisplay, {
         u: (state.handle || "Anonymous patron").slice(0, 24),
         t: noteVal.slice(0, 500), r: ratingVal, ts: Date.now(),
       }, user);
@@ -457,7 +468,7 @@ export function Picker({ state, setState, user }) {
               {display.n}
             </div>
             <div style={{ color: C.muted, fontSize: 14, marginTop: 8 }}>
-              {display.y} · {display.rt} min · dir. {display.d} · streaming on <span style={{ color: C.text }}>{display.svc === "Other" && display.svcDetail ? display.svcDetail : display.svc}</span>
+              {display.y} · {display.rt} min · dir. {(landedDetails && landedDetails.credits && (landedDetails.credits.crew || []).find(c => c.job === "Director")?.name) || display.d} · streaming on <span style={{ color: C.text }}>{display.svc === "Other" && display.svcDetail ? display.svcDetail : display.svc}</span>
             </div>
             {phase === "landed" && (() => {
               const cr = communityFor(display.n);
