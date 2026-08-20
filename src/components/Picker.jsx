@@ -21,6 +21,7 @@ export function Picker({ state, setState, user }) {
   const [maxRt, setMaxRt] = useState(150);
   const [phase, setPhase] = useState("idle");
   const [display, setDisplay] = useState(null);
+  const [landedDetails, setLandedDetails] = useState(null); // cast + full overview, fetched live once a pick lands
   const [why, setWhy] = useState("");
   const vetoes = state.vetoesLeft != null ? state.vetoesLeft : 2;
   const [minYr, setMinYr] = useState(1920);
@@ -58,6 +59,18 @@ export function Picker({ state, setState, user }) {
     cloud.loadCommunityRatings(500).then(rows => { if (on && rows) setCommunityRatings(rows); }).catch(() => { /* quiet */ });
     return () => { on = false; };
   }, []);
+
+  // Same "as much useful info as possible, no extra clicks" goal as the
+  // community-rating load above — cast and the full (untruncated) synopsis
+  // aren't stored on the lightweight film object, so this fetches them the
+  // moment a pick actually lands rather than gating them behind a button.
+  useEffect(() => {
+    if (phase !== "landed" || !display || !display.tmdbId) { setLandedDetails(null); return; }
+    let on = true;
+    setLandedDetails(null);
+    tmdb.filmDetails(display.tmdbId).then(d => { if (on) setLandedDetails(d); }).catch(() => { /* quiet — card still works with what it already has */ });
+    return () => { on = false; };
+  }, [phase, display && display.tmdbId]);
   const communityFor = (filmName) => {
     if (!communityRatings) return null;
     const s = slugify(filmName);
@@ -436,6 +449,10 @@ export function Picker({ state, setState, user }) {
         )}
         {display ? (
           <>
+            {phase === "landed" && display.poster && (
+              <img src={`https://image.tmdb.org/t/p/w342${display.poster}`} alt=""
+                style={{ width: 130, borderRadius: 10, boxShadow: "0 10px 30px rgba(0,0,0,0.5)", marginBottom: 16 }} />
+            )}
             <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "clamp(30px, 6vw, 44px)", letterSpacing: "0.04em", lineHeight: 1.05, marginTop: phase === "landed" ? 10 : 0 }}>
               {display.n}
             </div>
@@ -463,8 +480,8 @@ export function Picker({ state, setState, user }) {
                   )}
                   {display.tmdbId && (
                     <button className="nol-theater-opt" style={{ borderRadius: 999, padding: "5px 14px" }}
-                      onClick={() => { cloud.logEvent("theater_action", { action: "overview" }); setTheaterFilm(display); setTheaterMode("overview"); }}>
-                      Cast & full overview
+                      onClick={() => { cloud.logEvent("theater_action", { action: "trailer" }); setTheaterFilm(display); setTheaterMode("trailer"); }}>
+                      Watch trailer
                     </button>
                   )}
                 </div>
@@ -476,8 +493,25 @@ export function Picker({ state, setState, user }) {
                   color: C.muted, fontSize: 15, fontStyle: "italic", lineHeight: 1.6,
                   maxWidth: 460, margin: "16px auto 0",
                 }}>
-                  {display.syn || NO_SYN}
+                  {(landedDetails && landedDetails.overview) || display.syn || NO_SYN}
                 </p>
+                {landedDetails && landedDetails.credits && landedDetails.credits.cast && landedDetails.credits.cast.length > 0 && (
+                  <div style={{ maxWidth: 460, margin: "14px auto 0" }}>
+                    <div style={{ fontSize: 10, letterSpacing: "0.2em", textTransform: "uppercase", color: C.faint, marginBottom: 8 }}>
+                      Starring
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center" }}>
+                      {landedDetails.credits.cast.slice(0, 6).map(c => (
+                        <span key={c.id || c.name} style={{
+                          fontSize: 12, color: C.text, background: C.panelHi, border: `1px solid ${C.edge}`,
+                          borderRadius: 999, padding: "4px 11px",
+                        }}>
+                          {c.name}{c.character ? <span style={{ color: C.faint }}> · {c.character}</span> : null}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {seenMode ? (
                   <div style={{ marginTop: 20, borderTop: `1px solid ${C.edge}`, paddingTop: 18 }}>
                     <div style={{ fontSize: 11, letterSpacing: "0.3em", textTransform: "uppercase", color: C.amber, marginBottom: 10 }}>
