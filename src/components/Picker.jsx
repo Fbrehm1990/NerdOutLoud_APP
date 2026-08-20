@@ -513,8 +513,17 @@ export function Picker({ state, setState, user }) {
             )}
           </>
         ) : (
-          <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, letterSpacing: "0.15em", color: C.faint, paddingTop: 22 }}>
-            {pool.length === 0 ? "NO FILMS MATCH — CHECK SERVICES OR FILTERS" : "THE REEL AWAITS"}
+          <div style={{ paddingTop: 22 }}>
+            <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, letterSpacing: "0.15em", color: C.faint }}>
+              {pool.length === 0 ? "NO FILMS MATCH — CHECK SERVICES OR FILTERS" : "THE REEL AWAITS"}
+            </div>
+            {pool.length === 0 && source === "trending" && costFilter === "free" && (
+              <p style={{ color: C.faint, fontSize: 13, marginTop: 10, maxWidth: 420, marginLeft: "auto", marginRight: "auto", lineHeight: 1.5 }}>
+                This week's most popular titles are brand-new releases — free, ad-supported
+                services almost always carry older catalog movies instead. Try Free with a
+                different source, or switch back to Any cost to see what's trending.
+              </p>
+            )}
           </div>
         )}
       </div>
