@@ -46,7 +46,7 @@ export function TmdbSearch({ state, setState }) {
         nextId: s.nextId + 1,
         films: [...s.films, { id: s.nextId, ...f, status, elo: 1500, w: 0, l: 0, rating: null, note: "" }],
       }));
-      setMsg(`Added "${f.n}" (${f.svc === "Other" ? "service unknown" : "on " + f.svc}) to your ${status === "watchlist" ? "watchlist" : "watched vault"}.`);
+      setMsg(`Added "${f.n}" (${f.svc === "Other" ? (f.svcDetail ? "on " + f.svcDetail : "service unknown") : "on " + f.svc}) to your ${status === "watchlist" ? "watchlist" : "watched vault"}.`);
     } catch { setMsg("Couldn't fetch that film's details. Try again."); }
     setAdding(null);
   };
@@ -245,7 +245,7 @@ export function Library({ state, setState, goToFilm }) {
                 color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
               }}>{f.n}</div>
               <div style={{ fontSize: 12, color: C.faint, marginTop: 2 }}>
-                {f.y} · {f.rt}m · {f.svc}
+                {f.y} · {f.rt}m · {f.svc === "Other" && f.svcDetail ? f.svcDetail : f.svc}
               </div>
               {f.note && (
                 <div style={{ color: C.faint, fontSize: 12, fontStyle: "italic", marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>

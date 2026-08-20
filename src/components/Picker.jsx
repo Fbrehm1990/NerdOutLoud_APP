@@ -207,7 +207,7 @@ export function Picker({ state, setState, user }) {
     if ((profile.dirScore[f.d] || 0) >= 8) return `You've rated ${f.d}'s films highly`;
     if (f.mood === profile.bestMood) return `${MOODS[f.mood]} films are your highest-rated genre`;
     if (f.heat) return `#${f.rank} trending — a step outside your usual lane`;
-    if (f.__live) return `Currently streaming on ${f.svc}`;
+    if (f.__live) return `Currently streaming on ${f.svc === "Other" && f.svcDetail ? f.svcDetail : f.svc}`;
     return "A deep cut from the REELmunity catalog";
   };
 
@@ -440,7 +440,7 @@ export function Picker({ state, setState, user }) {
               {display.n}
             </div>
             <div style={{ color: C.muted, fontSize: 14, marginTop: 8 }}>
-              {display.y} · {display.rt} min · dir. {display.d} · streaming on <span style={{ color: C.text }}>{display.svc}</span>
+              {display.y} · {display.rt} min · dir. {display.d} · streaming on <span style={{ color: C.text }}>{display.svc === "Other" && display.svcDetail ? display.svcDetail : display.svc}</span>
             </div>
             {phase === "landed" && (() => {
               const cr = communityFor(display.n);

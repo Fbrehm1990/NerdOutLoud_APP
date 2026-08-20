@@ -80,7 +80,7 @@ export function NightFlow({ state, setState, user, gated, goSignup }) {
   return (
     <div className="nol-fade" style={{ maxWidth: 680, margin: "0 auto", padding: "0 16px 40px" }}>
       <SectionHead kicker="Movie night in progress" title={film.n}
-        sub={`${film.y} · ${film.rt} min · dir. ${film.d} · streaming on ${film.svc}`} />
+        sub={`${film.y} · ${film.rt} min · dir. ${film.d} · streaming on ${film.svc === "Other" && film.svcDetail ? film.svcDetail : film.svc}`} />
 
       <div style={{ display: "flex", justifyContent: "center", gap: 6, marginBottom: 22, flexWrap: "wrap" }}>
         {steps.map((sName, i) => (

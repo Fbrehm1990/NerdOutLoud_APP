@@ -34,6 +34,33 @@ export function tmdbSvc(wp) {
   } catch { return "Other"; }
 }
 
+// "Other" on its own tells someone nothing about where to actually find a
+// film — this recovers the real provider name (Peacock, Apple TV+,
+// Paramount+, AMC+, whatever it is) so that can be shown alongside the
+// generic "Other" filter bucket instead of just leaving people to guess.
+// Checks flatrate first (a genuine subscription service is the more useful
+// answer), then free/ads as a fallback, since a film can be worth surfacing
+// even when it's only available for free somewhere outside the tracked six.
+export function tmdbSvcDetail(wp) {
+  try {
+    const us = wp && wp.results && wp.results.US;
+    if (!us) return null;
+    const known = (n) => n.includes("netflix") || n.includes("prime") || n.includes("amazon")
+      || n === "max" || n.includes("hbo") || n.includes("hulu") || n.includes("disney") || n.includes("tubi");
+    const flat = us.flatrate || [];
+    for (const p of flat) {
+      const n = (p.provider_name || "").toLowerCase();
+      if (!known(n) && p.provider_name) return p.provider_name;
+    }
+    const free = [...(us.free || []), ...(us.ads || [])];
+    for (const p of free) {
+      const n = (p.provider_name || "").toLowerCase();
+      if (!known(n) && p.provider_name) return p.provider_name;
+    }
+    return null;
+  } catch { return null; }
+}
+
 // Same watch/providers payload tmdbSvc reads, checked for the free/ad-supported
 // categories instead of flatrate. Used to tag isFree directly on any film that
 // already has full details fetched (trending, now playing, etc.) — not just
@@ -56,6 +83,7 @@ export function tmdbToFilm(d) {
     rt: d.runtime || 110,
     mood: tmdbMood((d.genres || []).map(g => g.id)),
     svc: tmdbSvc(d["watch/providers"]),
+    svcDetail: tmdbSvcDetail(d["watch/providers"]),
     syn: (d.overview || "").slice(0, 200),
     poster: d.poster_path || null,
     tmdbId: d.id,
@@ -326,6 +354,7 @@ export const tmdb = {
     try {
       const d = await tmdb.filmDetails(id);
       const svc = tmdbSvc(d["watch/providers"]);
+      const svcDetail = tmdbSvcDetail(d["watch/providers"]);
       const usEntry = ((d.release_dates && d.release_dates.results) || []).find(r => r.iso_3166_1 === "US");
       const allUsDates = usEntry ? usEntry.release_dates : [];
       // Only type 3 (wide theatrical) counts as "really coming to a theatre near you."
@@ -337,7 +366,7 @@ export const tmdb = {
       const digitalDate = digitalEntries.length
         ? digitalEntries.map(rd => rd.release_date).sort()[0].slice(0, 10)
         : null;
-      info = { svc: svc === "Other" ? null : svc, date: digitalDate, hasTheatrical };
+      info = { svc: svc === "Other" ? (svcDetail || null) : svc, date: digitalDate, hasTheatrical };
     } catch { /* leave defaults — treated as stream-only until we know more */ }
     try { await store.set(cacheKey, JSON.stringify({ day: new Date().toDateString(), info })); } catch { /* ignore */ }
     return info;

@@ -74,7 +74,7 @@ export function TrendingStrip({ items, live, onPick, theaterIds, upcomingIds, on
                 </div>
               )}
               <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginTop: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.n}</div>
-              <div style={{ fontSize: 11, color: C.faint }}>{t.y} · {inTheaters ? "in theaters" : comingSoon ? "coming soon" : t.svc}</div>
+              <div style={{ fontSize: 11, color: C.faint }}>{t.y} · {inTheaters ? "in theaters" : comingSoon ? "coming soon" : (t.svc === "Other" && t.svcDetail ? t.svcDetail : t.svc)}</div>
             </div>
           );
         })}

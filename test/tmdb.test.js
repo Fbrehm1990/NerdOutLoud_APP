@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { tmdbMood, tmdbSvc, tmdbToFilm } from "../src/lib/tmdb.js";
+import { tmdbMood, tmdbSvc, tmdbSvcDetail, tmdbToFilm } from "../src/lib/tmdb.js";
 
 // ---------------------------------------------------------------------------
 // tmdbMood — every film's genre filter and taste-profile matching depends on
@@ -55,6 +55,34 @@ describe("tmdbSvc", () => {
   it("never throws on malformed input — a bad TMDB response shouldn't crash the picker", () => {
     expect(() => tmdbSvc({ results: { US: null } })).not.toThrow();
     expect(() => tmdbSvc("not even an object")).not.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// tmdbSvcDetail — recovers the real provider name for films tmdbSvc lumps
+// into the generic "Other" bucket, so the app can say where a film actually
+// is instead of just "Other" with no way to act on it.
+// ---------------------------------------------------------------------------
+describe("tmdbSvcDetail", () => {
+  it("returns the real provider name for a service outside the tracked six", () => {
+    const wp = { results: { US: { flatrate: [{ provider_name: "Peacock" }] } } };
+    expect(tmdbSvcDetail(wp)).toBe("Peacock");
+  });
+
+  it("returns null when the provider IS one of the tracked six — no detail needed there", () => {
+    const wp = { results: { US: { flatrate: [{ provider_name: "Netflix" }] } } };
+    expect(tmdbSvcDetail(wp)).toBe(null);
+  });
+
+  it("falls back to a free/ad-supported provider when there's no flatrate match", () => {
+    const wp = { results: { US: { ads: [{ provider_name: "Freevee" }] } } };
+    expect(tmdbSvcDetail(wp)).toBe("Freevee");
+  });
+
+  it("returns null rather than throwing on missing or malformed data", () => {
+    expect(tmdbSvcDetail({})).toBe(null);
+    expect(tmdbSvcDetail(null)).toBe(null);
+    expect(() => tmdbSvcDetail("not an object")).not.toThrow();
   });
 });
 
