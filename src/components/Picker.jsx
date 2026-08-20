@@ -7,6 +7,14 @@ import { SectionHead, Stat, RatingSlider, DualRangeSlider } from "./Shared.jsx";
 import { TrendingStrip, OverviewModal, TrailerModal, TicketsModal, ReleaseDateModal } from "./TheaterFeatures.jsx";
 import { trackFirstSpinConversion } from "../lib/googleAds.js";
 
+// Computed live, not hardcoded — a literal year here (e.g. "2025") quietly
+// becomes a hard ceiling that blocks every future release once the calendar
+// moves past it, which is exactly what happened here. +1 comfortably covers
+// next-year titles that already have a TMDB page (announced sequels, festival
+// premieres awaiting wide release) even before their actual release date.
+const CURRENT_YEAR = new Date().getFullYear();
+const MAX_FILTER_YEAR = CURRENT_YEAR + 1;
+
 export function Picker({ state, setState, user }) {
   const [source, setSource] = useState("taste");
   const [mood, setMood] = useState("any");
@@ -16,8 +24,9 @@ export function Picker({ state, setState, user }) {
   const [why, setWhy] = useState("");
   const vetoes = state.vetoesLeft != null ? state.vetoesLeft : 2;
   const [minYr, setMinYr] = useState(1920);
-  const [maxYr, setMaxYr] = useState(2025);
+  const [maxYr, setMaxYr] = useState(MAX_FILTER_YEAR);
   const [contentRating, setContentRating] = useState("any");
+  const [costFilter, setCostFilter] = useState("any"); // "any" | "free" | "paid"
   const [seenMode, setSeenMode] = useState(false);
   const [seenRating, setSeenRating] = useState(7.5);
   const [seenNote, setSeenNote] = useState("");
@@ -87,6 +96,7 @@ export function Picker({ state, setState, user }) {
   const services = state.services || [...ALL_SERVICES];
   const profile = tasteProfile(state.films);
   const ratingFiltered = contentRating !== "any";
+  const costFiltered = costFilter !== "any";
 
   // Single source of truth for what's eligible, rebuilt fresh on every use so
   // a pick can never land outside your selected services or filters.
@@ -97,15 +107,18 @@ export function Picker({ state, setState, user }) {
     const libTitles = new Set(state.films.map(f => f.n.toLowerCase()));
     const watchedTitles = new Set(state.films.filter(f => f.status === "watched").map(f => f.n.toLowerCase()));
 
-    // A content rating is selected: only the live per-service catalog carries
-    // verified certification data, so that's the only source used — trending,
-    // watchlist, and the curated catalog sit out this spin rather than risk an
-    // unverified rating slipping through.
-    if (ratingFiltered) {
+    // Content rating has no verified data outside the live per-service catalog
+    // at all, so that filter always forces liveOnly regardless of source. Cost
+    // is different — trending now carries real, verified isFree data too (see
+    // tmdbHasFreeAvailability), so a cost-only filter combined with the
+    // Trending source should actually filter trending, not silently abandon
+    // it and switch to an unrelated catalog behind the user's back.
+    if (ratingFiltered || (costFiltered && source !== "trending")) {
       const liveOnly = svcs
         .filter(s => TMDB_PROVIDERS[s])
         .flatMap(s => liveCatalog[`${s}::${contentRating}`] || [])
         .filter(c => !watchedTitles.has(c.n.toLowerCase()) && c.rt <= maxRt && c.y >= minYr && c.y <= maxYr && (mood === "any" || c.mood === mood))
+        .filter(c => !costFiltered || (costFilter === "free" ? c.isFree === true : c.isFree === false))
         .filter(c => {
           const lib = state.films.find(f => f.n.toLowerCase() === c.n.toLowerCase());
           return !lib || !openIds.has(lib.id);
@@ -125,6 +138,7 @@ export function Picker({ state, setState, user }) {
     const tr = TRS
       .map((t, i) => ({ ...t, rank: i + 1 }))
       .filter(t => !watchedTitles.has(t.n.toLowerCase()) && svcOk(t) && t.rt <= maxRt && t.y >= minYr && t.y <= maxYr && (mood === "any" || t.mood === mood))
+      .filter(t => !costFiltered || (costFilter === "free" ? t.isFree === true : t.isFree === false))
       .filter(t => {
         const lib = state.films.find(f => f.n.toLowerCase() === t.n.toLowerCase());
         return !lib || !openIds.has(lib.id);
@@ -368,9 +382,9 @@ export function Picker({ state, setState, user }) {
         </div>
         <div style={{ flex: "1 1 140px", minWidth: 130 }}>
           <div style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, marginBottom: 8 }}>
-            Years — <span style={{ color: C.text }}>{minYr <= 1920 && maxYr >= 2025 ? "any era" : `${minYr}–${maxYr}`}</span>
+            Years — <span style={{ color: C.text }}>{minYr <= 1920 && maxYr >= MAX_FILTER_YEAR ? "any era" : `${minYr}–${maxYr}`}</span>
           </div>
-          <DualRangeSlider min={1920} max={2025} step={5} lo={minYr} hi={maxYr} disabled={locked}
+          <DualRangeSlider min={1920} max={MAX_FILTER_YEAR} step={5} lo={minYr} hi={maxYr} disabled={locked}
             onChange={([lo, hi]) => { setMinYr(lo); setMaxYr(hi); }} />
         </div>
         <div style={{ flex: "0 1 108px", minWidth: 100 }}>
@@ -385,6 +399,19 @@ export function Picker({ state, setState, user }) {
             <option value="NC-17">NC-17</option>
           </select>
           {ratingFiltered && (
+            <div style={{ fontSize: 10, color: C.faint, marginTop: 4 }}>Live streaming catalog only</div>
+          )}
+        </div>
+        <div style={{ flex: "0 1 160px", minWidth: 150 }}>
+          <div style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, marginBottom: 8 }}>Cost</div>
+          <div role="group" aria-label="Free or paid filter" style={{ display: "flex", gap: 4 }}>
+            {[["any", "Any"], ["free", "Free"], ["paid", "Paid"]].map(([val, label]) => (
+              <button key={val} type="button" disabled={locked} onClick={() => setCostFilter(val)}
+                className={`nol-seg${costFilter === val ? " on" : ""}`}
+                style={{ flex: 1, padding: "9px 6px", fontSize: 12 }}>{label}</button>
+            ))}
+          </div>
+          {costFiltered && (
             <div style={{ fontSize: 10, color: C.faint, marginTop: 4 }}>Live streaming catalog only</div>
           )}
         </div>

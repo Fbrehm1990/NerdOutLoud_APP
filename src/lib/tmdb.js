@@ -34,6 +34,19 @@ export function tmdbSvc(wp) {
   } catch { return "Other"; }
 }
 
+// Same watch/providers payload tmdbSvc reads, checked for the free/ad-supported
+// categories instead of flatrate. Used to tag isFree directly on any film that
+// already has full details fetched (trending, now playing, etc.) — not just
+// the per-service discover sweeps, which is what let a cost filter silently
+// ignore the trending/now-playing sources entirely before this existed.
+export function tmdbHasFreeAvailability(wp) {
+  try {
+    const us = wp && wp.results && wp.results.US;
+    if (!us) return false;
+    return !!((us.free && us.free.length) || (us.ads && us.ads.length));
+  } catch { return false; }
+}
+
 export function tmdbToFilm(d) {
   const dir = ((d.credits && d.credits.crew) || []).find(c => c.job === "Director");
   return {
@@ -87,7 +100,7 @@ export const tmdb = {
   },
   async trending() {
     try {
-      const cached = await store.get("nol-tmdb-trending-v3");
+      const cached = await store.get("nol-tmdb-trending-v4");
       if (cached) {
         const { day, items } = JSON.parse(cached);
         if (day === new Date().toDateString() && items && items.length) return items;
@@ -96,17 +109,17 @@ export const tmdb = {
     const r = await fetch(tmdbProxy("/trending/movie/week"));
     if (!r.ok) throw new Error("trending failed");
     const j = await r.json();
-    const top = (j.results || []).slice(0, 10);
+    const top = (j.results || []).slice(0, 20);
     const items = [];
     await Promise.all(top.map(async (m, i) => {
       try {
         const d = await tmdb.filmDetails(m.id);
-        items[i] = { tid: "live" + m.id, tmdbId: m.id, heat: 100 - i * 3, poster: m.poster_path || null, ...tmdbToFilm(d) };
+        items[i] = { tid: "live" + m.id, tmdbId: m.id, heat: 100 - i * 3, poster: m.poster_path || null, isFree: tmdbHasFreeAvailability(d["watch/providers"]), ...tmdbToFilm(d) };
       } catch { /* skip this title */ }
     }));
     const clean = items.filter(Boolean);
     if (clean.length) {
-      try { await store.set("nol-tmdb-trending-v3", JSON.stringify({ day: new Date().toDateString(), items: clean })); } catch { /* ignore */ }
+      try { await store.set("nol-tmdb-trending-v4", JSON.stringify({ day: new Date().toDateString(), items: clean })); } catch { /* ignore */ }
     }
     return clean;
   },
@@ -335,7 +348,7 @@ export const tmdb = {
     const pid = TMDB_PROVIDERS[svcName];
     if (!pid) return [];
     const cert = certification && certification !== "any" ? certification : null;
-    const cacheKey = "nol-tmdb-discover-v2-" + svcName + (cert ? "-" + cert : "");
+    const cacheKey = "nol-tmdb-discover-v3-" + svcName + (cert ? "-" + cert : "");
     try {
       const cached = await store.get(cacheKey);
       if (cached) {
@@ -343,41 +356,93 @@ export const tmdb = {
         if (day === new Date().toDateString() && items && items.length) return items;
       }
     } catch { /* refetch */ }
-    const MAX_PAGES = 50; // ~1,000 titles ceiling per service — see SETUP-ACCOUNTS.md for why this isn't literally infinite
-    const pageUrl = (page) => tmdbProxy("/discover/movie", {
-      watch_region: "US", with_watch_providers: String(pid), with_watch_monetization_types: "flatrate",
-      sort_by: "popularity.desc", include_adult: "false", page: String(page),
-      // TMDB filters certification for us server-side — no per-title lookups needed.
-      ...(cert ? { certification_country: "US", certification: cert } : {}),
+    const MAX_PAGES = 50; // ~1,000 titles ceiling per monetization sweep — see SETUP-ACCOUNTS.md
+    const certParams = cert ? { certification_country: "US", certification: cert } : {};
+    const pageUrl = (page, monetization) => tmdbProxy("/discover/movie", {
+      watch_region: "US", with_watch_providers: String(pid), with_watch_monetization_types: monetization,
+      sort_by: "popularity.desc", include_adult: "false", page: String(page), ...certParams,
     });
-    let all = [];
-    let totalPages = 1;
-    try {
-      const r1 = await fetch(pageUrl(1));
-      if (r1.ok) {
-        const j1 = await r1.json();
-        all = all.concat(j1.results || []);
-        totalPages = Math.min(j1.total_pages || 1, MAX_PAGES);
-      }
-    } catch { /* just page 1 results, if any */ }
-    const remaining = [];
-    for (let p = 2; p <= totalPages; p++) remaining.push(p);
-    const BATCH = 6; // fetch several pages at once so a 1,000-title pull doesn't take forever
-    for (let i = 0; i < remaining.length; i += BATCH) {
-      const batch = remaining.slice(i, i + BATCH);
+    // One sweep per monetization type, not one combined query — TMDB's OR/AND
+    // handling for this specific parameter isn't consistently documented, and
+    // running them separately is unambiguous: whatever comes back from the
+    // "free" sweep really is free, full stop, regardless of query-syntax nuance.
+    async function sweep(monetization, maxPages) {
+      let all = [];
+      let totalPages = 1;
       try {
-        const results = await Promise.all(
-          batch.map(p => fetch(pageUrl(p)).then(r => (r.ok ? r.json() : { results: [] })).catch(() => ({ results: [] })))
-        );
-        results.forEach(j => { all = all.concat(j.results || []); });
-      } catch { break; }
+        const r1 = await fetch(pageUrl(1, monetization));
+        if (r1.ok) {
+          const j1 = await r1.json();
+          all = all.concat(j1.results || []);
+          totalPages = Math.min(j1.total_pages || 1, maxPages);
+        }
+      } catch { /* just page 1, if any */ }
+      const remaining = [];
+      for (let p = 2; p <= totalPages; p++) remaining.push(p);
+      const BATCH = 6;
+      for (let i = 0; i < remaining.length; i += BATCH) {
+        const batch = remaining.slice(i, i + BATCH);
+        try {
+          const results = await Promise.all(
+            batch.map(p => fetch(pageUrl(p, monetization)).then(r => (r.ok ? r.json() : { results: [] })).catch(() => ({ results: [] })))
+          );
+          results.forEach(j => { all = all.concat(j.results || []); });
+        } catch { break; }
+      }
+      return all;
     }
-    const items = all.slice(0, MAX_PAGES * 20).map(m => ({
+    // A brand-new release can sit on page 40+ of a popularity sort simply for
+    // not having built up a vote count yet — which silently squeezes recent
+    // titles out once everything gets capped at MAX_PAGES. This lighter sweep,
+    // sorted by release date instead of popularity, makes sure "new this month"
+    // titles are actually present in the pool regardless of how popular they
+    // are yet.
+    async function recentSweep(monetization) {
+      const today = new Date().toISOString().slice(0, 10);
+      const sixMonthsAgo = new Date(Date.now() - 180 * 86400000).toISOString().slice(0, 10);
+      let all = [];
+      for (let page = 1; page <= 3; page++) {
+        try {
+          const r = await fetch(tmdbProxy("/discover/movie", {
+            watch_region: "US", with_watch_providers: String(pid), with_watch_monetization_types: monetization,
+            sort_by: "primary_release_date.desc", "primary_release_date.gte": sixMonthsAgo,
+            "primary_release_date.lte": today, include_adult: "false", page: String(page), ...certParams,
+          }));
+          if (!r.ok) break;
+          const j = await r.json();
+          all = all.concat(j.results || []);
+          if (page >= (j.total_pages || 1)) break;
+        } catch { break; }
+      }
+      return all;
+    }
+
+    const [paidPopular, freePopular, paidRecent, freeRecent] = await Promise.all([
+      sweep("flatrate", MAX_PAGES),
+      sweep("free,ads", MAX_PAGES),
+      recentSweep("flatrate"),
+      recentSweep("free,ads"),
+    ]);
+
+    const byId = new Map();
+    const merge = (list, isFree) => {
+      list.forEach(m => {
+        const existing = byId.get(m.id);
+        if (existing) { existing.isFree = existing.isFree || isFree; return; }
+        byId.set(m.id, { ...m, isFree });
+      });
+    };
+    merge(paidPopular, false);
+    merge(freePopular, true);
+    merge(paidRecent, false);
+    merge(freeRecent, true);
+
+    const items = Array.from(byId.values()).map(m => ({
       n: m.title || "Untitled",
       y: m.release_date ? Number(m.release_date.slice(0, 4)) : new Date().getFullYear(),
       d: "Unknown", rt: 110, mood: tmdbMood(m.genre_ids || []), svc: svcName,
       syn: (m.overview || "").slice(0, 200), poster: m.poster_path || null,
-      tmdbId: m.id, __live: true,
+      tmdbId: m.id, __live: true, isFree: m.isFree,
     }));
     if (items.length) {
       try { await store.set(cacheKey, JSON.stringify({ day: new Date().toDateString(), items })); } catch { /* ignore */ }
