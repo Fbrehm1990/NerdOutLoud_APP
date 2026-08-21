@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { slugify, calStats, computeStreak, tasteProfile, weightedPick } from "../src/lib/utils.js";
+import { slugify, calStats, computeStreak, tasteProfile, weightedPick, generatePatronName } from "../src/lib/utils.js";
 
 // ---------------------------------------------------------------------------
 // slugify — used everywhere a film title needs to become a stable, URL/key-safe
@@ -164,6 +164,29 @@ describe("tasteProfile", () => {
 // ---------------------------------------------------------------------------
 // weightedPick — the actual randomness behind "spin" landing on a film.
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// generatePatronName — the auto-generated name for anyone who opts out of
+// picking their own at signup. Every account should still become a real,
+// nameable patron either way.
+// ---------------------------------------------------------------------------
+describe("generatePatronName", () => {
+  it("produces a name within the 24-character handle limit enforced at signup", () => {
+    for (let i = 0; i < 50; i++) {
+      expect(generatePatronName().length).toBeLessThanOrEqual(24);
+    }
+  });
+
+  it("always includes a number, so repeat signups don't collide as often", () => {
+    expect(generatePatronName()).toMatch(/\d{3}$/);
+  });
+
+  it("produces varied names rather than always returning the same one", () => {
+    const names = new Set();
+    for (let i = 0; i < 20; i++) names.add(generatePatronName());
+    expect(names.size).toBeGreaterThan(1);
+  });
+});
+
 describe("weightedPick", () => {
   it("returns the only item when given a single-item list", () => {
     const items = ["only-film"];

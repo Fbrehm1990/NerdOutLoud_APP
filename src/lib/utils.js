@@ -81,3 +81,21 @@ export async function postToLobby(film, msg, user) {
   } catch { return null; }
 }
 
+// For anyone who'd rather not pick their own name at signup — every account
+// still becomes a real patron either way, this just fills in the name half.
+const PATRON_ADJ = [
+  "Midnight", "Velvet", "Neon", "Vintage", "Silent", "Golden", "Curious",
+  "Cinematic", "Nostalgic", "Devoted", "Retro", "Indie", "Classic",
+  "Dramatic", "Legendary", "Casual", "Arthouse", "Cult",
+];
+const PATRON_NOUN = [
+  "Viewer", "Critic", "Popcorn", "Marquee", "Matinee", "Usher", "Extra",
+  "Cameo", "Sequel", "Premiere", "Encore", "Trailer", "Reel",
+];
+export function generatePatronName() {
+  const adj = PATRON_ADJ[Math.floor(Math.random() * PATRON_ADJ.length)];
+  const noun = PATRON_NOUN[Math.floor(Math.random() * PATRON_NOUN.length)];
+  const num = Math.floor(Math.random() * 900) + 100; // 100-999, avoids awkward single digits
+  return `${adj}${noun}${num}`;
+}
+

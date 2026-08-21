@@ -4,6 +4,7 @@ import { ADMIN_EMAIL, cloud } from "../lib/supabaseClient.js";
 import { C } from "../lib/constants.js";
 import { SectionHead, Panel, Stat } from "./Shared.jsx";
 import { trackSignupConversion } from "../lib/googleAds.js";
+import { generatePatronName } from "../lib/utils.js";
 
 // ---------------- Admin analytics — visible only to ADMIN_EMAIL ----------------
 export function AdminPage() {
@@ -267,6 +268,8 @@ export function ResetPasswordPage({ onDone }) {
 export function AccountPage({ user, onDone, initialMode, handle, saveHandle }) {
   const [mode, setMode] = useState(initialMode === "signup" ? "signup" : "signin");
   const [uname, setUname] = useState("");
+  const [nameChoice, setNameChoice] = useState(null); // null (undecided) | "own" | "generated"
+  const [generatedName, setGeneratedName] = useState("");
   const [patronEdit, setPatronEdit] = useState(handle || "");
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
@@ -346,9 +349,12 @@ export function AccountPage({ user, onDone, initialMode, handle, saveHandle }) {
       else {
         await persistEmailChoice(email.trim());
         if (mode === "signup") {
-          if (uname.trim()) saveHandle(uname.trim().slice(0, 24));
+          const finalName = nameChoice === "own" ? uname.trim() : generatedName;
+          if (finalName) saveHandle(finalName.slice(0, 24));
           trackSignupConversion();
-          setMsg("Account created. If your email needs confirming, check your inbox — then sign in.");
+          setMsg(finalName === generatedName && nameChoice === "generated"
+            ? `Account created — you're in as ${generatedName}. If your email needs confirming, check your inbox — then sign in.`
+            : "Account created. If your email needs confirming, check your inbox — then sign in.");
         }
         else onDone();
       }
@@ -406,10 +412,29 @@ export function AccountPage({ user, onDone, initialMode, handle, saveHandle }) {
       }}>
         {mode === "signup" && (
           <>
-            <label htmlFor="nol-username" style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, marginBottom: -6 }}>Patron name</label>
-            <input className="nol-input" type="text" id="nol-username" name="username"
-              placeholder="Your public username (shown on reviews)" value={uname}
-              onChange={e => setUname(e.target.value)} autoComplete="username" maxLength={24} autoCapitalize="none" spellCheck={false} />
+            <label style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, marginBottom: -6 }}>Patron name</label>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button type="button" className={`nol-seg${nameChoice === "own" ? " on" : ""}`} style={{ flex: 1 }}
+                onClick={() => setNameChoice("own")}>I'll pick my own</button>
+              <button type="button" className={`nol-seg${nameChoice === "generated" ? " on" : ""}`} style={{ flex: 1 }}
+                onClick={() => { setNameChoice("generated"); setGeneratedName(generatePatronName()); }}>Surprise me</button>
+            </div>
+            {nameChoice === "own" && (
+              <input className="nol-input" type="text" id="nol-username" name="username"
+                placeholder="Your public username (shown on reviews)" value={uname}
+                onChange={e => setUname(e.target.value)} autoComplete="username" maxLength={24} autoCapitalize="none" spellCheck={false} />
+            )}
+            {nameChoice === "generated" && (
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{
+                  flex: 1, fontFamily: "'Bebas Neue', sans-serif", fontSize: 18, letterSpacing: "0.03em",
+                  color: C.amber, background: C.panelHi, border: `1px solid ${C.edge}`, borderRadius: 8,
+                  padding: "10px 12px",
+                }}>{generatedName}</span>
+                <button type="button" className="nol-ghost" title="Get a different name"
+                  onClick={() => setGeneratedName(generatePatronName())}>🎲 Shuffle</button>
+              </div>
+            )}
           </>
         )}
         <label htmlFor="nol-email" style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, marginBottom: -6 }}>Email</label>
@@ -433,7 +458,7 @@ export function AccountPage({ user, onDone, initialMode, handle, saveHandle }) {
         </label>
         {msg && <p style={{ color: C.amberSoft, fontSize: 13, margin: 0, lineHeight: 1.5 }}>{msg}</p>}
         <button className="nol-btn" onClick={go}
-          disabled={busy || !email.trim() || pw.length < 8 || (mode === "signup" && uname.trim().length < 2)}>
+          disabled={busy || !email.trim() || pw.length < 8 || (mode === "signup" && (nameChoice === null || (nameChoice === "own" && uname.trim().length < 2)))}>
           {busy ? "One moment…" : mode === "signin" ? "Sign in" : "Create account"}
         </button>
         <p style={{ color: C.faint, fontSize: 12, lineHeight: 1.55, margin: 0, textAlign: "center" }}>
