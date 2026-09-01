@@ -462,10 +462,10 @@ export function Picker({ state, setState, user }) {
         <div style={{ flex: "0 1 190px", minWidth: 180 }}>
           <div style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, marginBottom: 8 }}>Series</div>
           <div role="group" aria-label="Series filter" style={{ display: "flex", gap: 4 }}>
-            {[["any", "Any"], ["no-series", "No sequels"], ["series-only", "Sequels only"]].map(([val, label]) => (
+            {[["any", "Any"], ["no-series", "Exclude"], ["series-only", "Only"]].map(([val, label]) => (
               <button key={val} type="button" disabled={locked} onClick={() => setSeriesFilter(val)}
                 className={`nol-seg${seriesFilter === val ? " on" : ""}`}
-                style={{ flex: 1, padding: "9px 4px", fontSize: 11 }}>{label}</button>
+                style={{ flex: 1, padding: "9px 6px", fontSize: 12 }}>{label}</button>
             ))}
           </div>
           {seriesFilter !== "any" && (
