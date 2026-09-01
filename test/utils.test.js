@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { slugify, calStats, computeStreak, tasteProfile, weightedPick, generatePatronName } from "../src/lib/utils.js";
+import { slugify, calStats, computeStreak, tasteProfile, weightedPick, generatePatronName, looksLikeSeriesEntry } from "../src/lib/utils.js";
 
 // ---------------------------------------------------------------------------
 // slugify — used everywhere a film title needs to become a stable, URL/key-safe
@@ -184,6 +184,50 @@ describe("generatePatronName", () => {
     const names = new Set();
     for (let i = 0; i < 20; i++) names.add(generatePatronName());
     expect(names.size).toBeGreaterThan(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// looksLikeSeriesEntry — best-effort sequel detection by title pattern, since
+// TMDB's bulk catalog endpoint has no real "belongs to a collection" filter.
+// Includes its two known, documented limitations as real test cases rather
+// than pretending the heuristic is exact.
+// ---------------------------------------------------------------------------
+describe("looksLikeSeriesEntry", () => {
+  it("catches a trailing number after a real word", () => {
+    expect(looksLikeSeriesEntry("John Wick 4")).toBe(true);
+    expect(looksLikeSeriesEntry("Toy Story 3")).toBe(true);
+  });
+
+  it("catches Roman numeral sequels", () => {
+    expect(looksLikeSeriesEntry("Scream VI")).toBe(true);
+  });
+
+  it("catches Part/Chapter style subtitles", () => {
+    expect(looksLikeSeriesEntry("Dune: Part Two")).toBe(true);
+    expect(looksLikeSeriesEntry("John Wick: Chapter 4")).toBe(true);
+  });
+
+  it("does not flag a bare numeric title as a sequel", () => {
+    expect(looksLikeSeriesEntry("1917")).toBe(false);
+    expect(looksLikeSeriesEntry("300")).toBe(false);
+  });
+
+  it("does not flag an ordinary title with no sequel-style pattern", () => {
+    expect(looksLikeSeriesEntry("Oppenheimer")).toBe(false);
+    expect(looksLikeSeriesEntry("Everything Everywhere All at Once")).toBe(false);
+  });
+
+  it("known limitation: misses a colon-subtitle sequel with no numbering at all", () => {
+    // Documented gap, not a bug — "Top Gun: Maverick" has no Roman numeral,
+    // "Part N", or trailing number for the heuristic to catch.
+    expect(looksLikeSeriesEntry("Top Gun: Maverick")).toBe(false);
+  });
+
+  it("known limitation: a trailing number can false-positive on a real one-off title", () => {
+    // "District 9" isn't a sequel, but matches the same "word + number" shape
+    // as "John Wick 4" — an accepted tradeoff of a title-only heuristic.
+    expect(looksLikeSeriesEntry("District 9")).toBe(true);
   });
 });
 

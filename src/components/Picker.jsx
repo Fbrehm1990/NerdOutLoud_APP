@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { cloud } from "../lib/supabaseClient.js";
 import { TMDB_PROVIDERS, tmdb } from "../lib/tmdb.js";
 import { ALL_SERVICES, TRENDING, CATALOG, NO_SYN, C, MOODS } from "../lib/constants.js";
-import { slugify, calStats, computeStreak, tasteProfile, weightedPick, postToLobby } from "../lib/utils.js";
+import { slugify, calStats, computeStreak, tasteProfile, weightedPick, postToLobby, looksLikeSeriesEntry } from "../lib/utils.js";
 import { SectionHead, Stat, RatingSlider, DualRangeSlider } from "./Shared.jsx";
 import { TrendingStrip, OverviewModal, TrailerModal, TicketsModal, ReleaseDateModal } from "./TheaterFeatures.jsx";
 import { trackFirstSpinConversion } from "../lib/googleAds.js";
@@ -28,6 +28,8 @@ export function Picker({ state, setState, user }) {
   const [maxYr, setMaxYr] = useState(MAX_FILTER_YEAR);
   const [contentRating, setContentRating] = useState("any");
   const [costFilter, setCostFilter] = useState("any"); // "any" | "free" | "paid"
+  const [englishOnly, setEnglishOnly] = useState(false);
+  const [seriesFilter, setSeriesFilter] = useState("any"); // "any" | "no-series" | "series-only"
   const [seenMode, setSeenMode] = useState(false);
   const [seenRating, setSeenRating] = useState(7.5);
   const [seenNote, setSeenNote] = useState("");
@@ -92,19 +94,19 @@ export function Picker({ state, setState, user }) {
     if (!tmdb.enabled()) return;
     let on = true;
     const svcs = state.services || [];
-    const keyFor = (s) => `${s}::${contentRating}`;
+    const keyFor = (s) => `${s}::${contentRating}::${englishOnly ? "en" : "any"}`;
     const next = svcs.find(s => TMDB_PROVIDERS[s] && !liveCatalog[keyFor(s)] && !loadingSvcs[keyFor(s)]);
     if (!next) return;
     const key = keyFor(next);
     setLoadingSvcs(p => ({ ...p, [key]: true }));
-    tmdb.discoverByService(next, contentRating).then(items => {
+    tmdb.discoverByService(next, contentRating, englishOnly).then(items => {
       if (!on) return;
       setLiveCatalog(p => ({ ...p, [key]: items }));
     }).catch(() => { /* leave unfetched, curated catalog still covers it */ }).finally(() => {
       if (on) setLoadingSvcs(p => ({ ...p, [key]: false }));
     });
     return () => { on = false; };
-  }, [state.services.join("|"), contentRating, Object.keys(liveCatalog).join("|")]);
+  }, [state.services.join("|"), contentRating, englishOnly, Object.keys(liveCatalog).join("|")]);
 
   const services = state.services || [...ALL_SERVICES];
   const profile = tasteProfile(state.films);
@@ -121,17 +123,20 @@ export function Picker({ state, setState, user }) {
     const watchedTitles = new Set(state.films.filter(f => f.status === "watched").map(f => f.n.toLowerCase()));
 
     // Content rating has no verified data outside the live per-service catalog
-    // at all, so that filter always forces liveOnly regardless of source. Cost
-    // is different — trending now carries real, verified isFree data too (see
-    // tmdbHasFreeAvailability), so a cost-only filter combined with the
-    // Trending source should actually filter trending, not silently abandon
-    // it and switch to an unrelated catalog behind the user's back.
-    if (ratingFiltered || (costFiltered && source !== "trending")) {
+    // at all, so that filter always forces liveOnly regardless of source.
+    // Cost and language are different — trending now carries real, verified
+    // isFree and originalLanguage data too (a full detail fetch per title, a
+    // small fixed-size list rather than the 1,000+ title catalog sweep), so
+    // those filters can actually apply to trending directly instead of
+    // silently abandoning it and switching to an unrelated catalog.
+    const trendingCanHandleFilters = source === "trending";
+    if (ratingFiltered || (costFiltered && !trendingCanHandleFilters) || (englishOnly && !trendingCanHandleFilters)) {
       const liveOnly = svcs
         .filter(s => TMDB_PROVIDERS[s])
-        .flatMap(s => liveCatalog[`${s}::${contentRating}`] || [])
+        .flatMap(s => liveCatalog[`${s}::${contentRating}::${englishOnly ? "en" : "any"}`] || [])
         .filter(c => !watchedTitles.has(c.n.toLowerCase()) && c.rt <= maxRt && c.y >= minYr && c.y <= maxYr && (mood === "any" || c.mood === mood))
         .filter(c => !costFiltered || (costFilter === "free" ? c.isFree === true : c.isFree === false))
+        .filter(c => seriesFilter === "any" || (seriesFilter === "no-series" ? !looksLikeSeriesEntry(c.n) : looksLikeSeriesEntry(c.n)))
         .filter(c => {
           const lib = state.films.find(f => f.n.toLowerCase() === c.n.toLowerCase());
           return !lib || !openIds.has(lib.id);
@@ -146,19 +151,23 @@ export function Picker({ state, setState, user }) {
     }
 
     const wl = state.films.filter(f =>
-      f.status === "watchlist" && !openIds.has(f.id) && svcOk(f) && f.rt <= maxRt && f.y >= minYr && f.y <= maxYr && (mood === "any" || f.mood === mood));
+      f.status === "watchlist" && !openIds.has(f.id) && svcOk(f) && f.rt <= maxRt && f.y >= minYr && f.y <= maxYr && (mood === "any" || f.mood === mood)
+      && (seriesFilter === "any" || (seriesFilter === "no-series" ? !looksLikeSeriesEntry(f.n) : looksLikeSeriesEntry(f.n))));
     const TRS = liveTrending || TRENDING;
     const tr = TRS
       .map((t, i) => ({ ...t, rank: i + 1 }))
       .filter(t => !watchedTitles.has(t.n.toLowerCase()) && svcOk(t) && t.rt <= maxRt && t.y >= minYr && t.y <= maxYr && (mood === "any" || t.mood === mood))
       .filter(t => !costFiltered || (costFilter === "free" ? t.isFree === true : t.isFree === false))
+      .filter(t => !englishOnly || t.originalLanguage === "en" || t.originalLanguage == null)
+      .filter(t => seriesFilter === "any" || (seriesFilter === "no-series" ? !looksLikeSeriesEntry(t.n) : looksLikeSeriesEntry(t.n)))
       .filter(t => {
         const lib = state.films.find(f => f.n.toLowerCase() === t.n.toLowerCase());
         return !lib || !openIds.has(lib.id);
       });
-    const liveFilms = svcs.filter(s => TMDB_PROVIDERS[s]).flatMap(s => liveCatalog[`${s}::any`] || []);
+    const liveFilms = svcs.filter(s => TMDB_PROVIDERS[s]).flatMap(s => liveCatalog[`${s}::any::any`] || []);
     const cat = [...CATALOG, ...liveFilms]
       .filter(c => !watchedTitles.has(c.n.toLowerCase()) && svcOk(c) && c.rt <= maxRt && c.y >= minYr && c.y <= maxYr && (mood === "any" || c.mood === mood))
+      .filter(c => seriesFilter === "any" || (seriesFilter === "no-series" ? !looksLikeSeriesEntry(c.n) : looksLikeSeriesEntry(c.n)))
       .filter(c => {
         const lib = state.films.find(f => f.n.toLowerCase() === c.n.toLowerCase());
         return !lib || !openIds.has(lib.id);
@@ -166,7 +175,8 @@ export function Picker({ state, setState, user }) {
     if (source === "rewatch") {
       return state.films.filter(f =>
         f.status === "watched" && !openIds.has(f.id) && svcOk(f) &&
-        f.rt <= maxRt && f.y >= minYr && f.y <= maxYr && (mood === "any" || f.mood === mood));
+        f.rt <= maxRt && f.y >= minYr && f.y <= maxYr && (mood === "any" || f.mood === mood)
+        && (seriesFilter === "any" || (seriesFilter === "no-series" ? !looksLikeSeriesEntry(f.n) : looksLikeSeriesEntry(f.n))));
     }
     if (source === "watchlist") return wl;
     if (source === "trending") return tr;
@@ -437,6 +447,29 @@ export function Picker({ state, setState, user }) {
           </div>
           {costFiltered && (
             <div style={{ fontSize: 10, color: C.faint, marginTop: 4 }}>Live streaming catalog only</div>
+          )}
+        </div>
+        <div style={{ flex: "0 1 150px", minWidth: 140 }}>
+          <div style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, marginBottom: 8 }}>Language</div>
+          <div role="group" aria-label="English only filter" style={{ display: "flex", gap: 4 }}>
+            {[[false, "Any"], [true, "English only"]].map(([val, label]) => (
+              <button key={String(val)} type="button" disabled={locked} onClick={() => setEnglishOnly(val)}
+                className={`nol-seg${englishOnly === val ? " on" : ""}`}
+                style={{ flex: 1, padding: "9px 6px", fontSize: 12 }}>{label}</button>
+            ))}
+          </div>
+        </div>
+        <div style={{ flex: "0 1 190px", minWidth: 180 }}>
+          <div style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, marginBottom: 8 }}>Series</div>
+          <div role="group" aria-label="Series filter" style={{ display: "flex", gap: 4 }}>
+            {[["any", "Any"], ["no-series", "No sequels"], ["series-only", "Sequels only"]].map(([val, label]) => (
+              <button key={val} type="button" disabled={locked} onClick={() => setSeriesFilter(val)}
+                className={`nol-seg${seriesFilter === val ? " on" : ""}`}
+                style={{ flex: 1, padding: "9px 4px", fontSize: 11 }}>{label}</button>
+            ))}
+          </div>
+          {seriesFilter !== "any" && (
+            <div style={{ fontSize: 10, color: C.faint, marginTop: 4 }}>Best-effort match by title, not exact</div>
           )}
         </div>
         <div style={{ fontSize: 12, color: C.faint, paddingBottom: 10 }}>

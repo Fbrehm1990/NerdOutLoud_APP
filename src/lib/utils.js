@@ -99,3 +99,23 @@ export function generatePatronName() {
   return `${adj}${noun}${num}`;
 }
 
+// Best-effort only — TMDB's own community has asked for a real "belongs to a
+// collection" filter on the bulk discover endpoint and it doesn't exist; that
+// data is only available via an individual detail lookup per film, which
+// isn't practical across a 1,000+ title catalog sweep. This falls back to
+// recognizing common sequel naming patterns in the title itself instead:
+// trailing Roman numerals, "Part Two"/"Chapter 2" style subtitles, and a
+// trailing number after a real word (John Wick 4) while deliberately NOT
+// matching bare numeric titles like "1917" or "300". It will miss sequels
+// that use a colon-subtitle with no numbering at all (Top Gun: Maverick) and
+// very occasionally flag a one-off film that happens to share a naming
+// pattern — an approximation, not a guarantee.
+export function looksLikeSeriesEntry(title) {
+  const t = (title || "").trim();
+  if (/\s(II|III|IV|V|VI|VII|VIII|IX|X)$/.test(t)) return true;
+  if (/\bPart\s+(One|Two|Three|Four|Five|\d+)\b/i.test(t)) return true;
+  if (/\bChapter\s+\d+\b/i.test(t)) return true;
+  if (/[a-zA-Z]\s\d{1,2}$/.test(t)) return true;
+  return false;
+}
+

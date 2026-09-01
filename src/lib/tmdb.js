@@ -87,6 +87,7 @@ export function tmdbToFilm(d) {
     syn: (d.overview || "").slice(0, 200),
     poster: d.poster_path || null,
     tmdbId: d.id,
+    originalLanguage: d.original_language || null,
   };
 }
 
@@ -373,11 +374,11 @@ export const tmdb = {
   },
   // Pulls a large, currently-streaming slice for one service via TMDB's discover
   // endpoint (filtered by watch provider), cached per-service for the day.
-  async discoverByService(svcName, certification) {
+  async discoverByService(svcName, certification, englishOnly) {
     const pid = TMDB_PROVIDERS[svcName];
     if (!pid) return [];
     const cert = certification && certification !== "any" ? certification : null;
-    const cacheKey = "nol-tmdb-discover-v3-" + svcName + (cert ? "-" + cert : "");
+    const cacheKey = "nol-tmdb-discover-v3-" + svcName + (cert ? "-" + cert : "") + (englishOnly ? "-en" : "");
     try {
       const cached = await store.get(cacheKey);
       if (cached) {
@@ -387,9 +388,10 @@ export const tmdb = {
     } catch { /* refetch */ }
     const MAX_PAGES = 50; // ~1,000 titles ceiling per monetization sweep — see SETUP-ACCOUNTS.md
     const certParams = cert ? { certification_country: "US", certification: cert } : {};
+    const langParams = englishOnly ? { with_original_language: "en" } : {};
     const pageUrl = (page, monetization) => tmdbProxy("/discover/movie", {
       watch_region: "US", with_watch_providers: String(pid), with_watch_monetization_types: monetization,
-      sort_by: "popularity.desc", include_adult: "false", page: String(page), ...certParams,
+      sort_by: "popularity.desc", include_adult: "false", page: String(page), ...certParams, ...langParams,
     });
     // One sweep per monetization type, not one combined query — TMDB's OR/AND
     // handling for this specific parameter isn't consistently documented, and
@@ -435,7 +437,7 @@ export const tmdb = {
           const r = await fetch(tmdbProxy("/discover/movie", {
             watch_region: "US", with_watch_providers: String(pid), with_watch_monetization_types: monetization,
             sort_by: "primary_release_date.desc", "primary_release_date.gte": sixMonthsAgo,
-            "primary_release_date.lte": today, include_adult: "false", page: String(page), ...certParams,
+            "primary_release_date.lte": today, include_adult: "false", page: String(page), ...certParams, ...langParams,
           }));
           if (!r.ok) break;
           const j = await r.json();
