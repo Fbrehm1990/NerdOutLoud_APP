@@ -452,12 +452,15 @@ export function Picker({ state, setState, user }) {
         <div style={{ flex: "0 1 150px", minWidth: 140 }}>
           <div style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, marginBottom: 8 }}>Language</div>
           <div role="group" aria-label="English only filter" style={{ display: "flex", gap: 4 }}>
-            {[[false, "Any"], [true, "English only"]].map(([val, label]) => (
+            {[[false, "Any"], [true, "English"]].map(([val, label]) => (
               <button key={String(val)} type="button" disabled={locked} onClick={() => setEnglishOnly(val)}
                 className={`nol-seg${englishOnly === val ? " on" : ""}`}
                 style={{ flex: 1, padding: "9px 6px", fontSize: 12 }}>{label}</button>
             ))}
           </div>
+          {englishOnly && (
+            <div style={{ fontSize: 10, color: C.faint, marginTop: 4 }}>Live streaming catalog only</div>
+          )}
         </div>
         <div style={{ flex: "0 1 190px", minWidth: 180 }}>
           <div style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, marginBottom: 8 }}>Series</div>
