@@ -78,6 +78,7 @@ export default function REELmunity() {
     };
   }, []);
   const syncedFor = useRef(null);
+  const caughtUpThisLoad = useRef(false); // catch-up notifications are inherently a once-per-load concept — this guards that explicitly, rather than relying solely on the effect's dependency array behaving perfectly
   const syncingRef = useRef(false);
   const [syncSettled, setSyncSettled] = useState(false);
   const stateRef = useRef(null);
@@ -90,9 +91,21 @@ export default function REELmunity() {
   const pushNotification = (n) => {
     setState(s => {
       if (!s) return s;
+      const existing = s.notifications || [];
+      // Belt-and-suspenders on top of the effect-level fixes above: if
+      // something with the same title/sub/filmSlug landed in the last minute,
+      // treat this as a duplicate rather than trusting every upstream caller
+      // to never double-fire. A minute is generous enough that it can't hide
+      // two genuinely separate, fast-fire real events (e.g. two different
+      // people commenting seconds apart would have different handles in the
+      // title), while comfortably covering any re-run of the same effect.
+      const oneMinuteAgo = Date.now() - 60000;
+      const isDuplicate = existing.some(e =>
+        e.ts >= oneMinuteAgo && e.title === n.title && e.sub === n.sub && e.filmSlug === n.filmSlug);
+      if (isDuplicate) return s;
       const next = [
         { id: Date.now() + Math.random(), read: false, ts: Date.now(), ...n },
-        ...(s.notifications || []),
+        ...existing,
       ].slice(0, 30);
       return { ...s, notifications: next };
     });
@@ -265,7 +278,12 @@ export default function REELmunity() {
     };
     const off = cloud.subscribeLobby(onInsert);
     return off;
-  }, [user]);
+    // Depends on user.id (a stable string), not the user object itself — Supabase's
+    // auth listener fires on background token refreshes too, not just real sign-ins,
+    // and hands back a brand-new object each time even for the same logged-in
+    // account. Depending on the object reference directly would tear down and
+    // recreate this subscription on every refresh for no reason.
+  }, [user && user.id]);
 
   // Catch-up pass: the live subscriptions above only fire while this tab is
   // actually open at the exact moment something happens — genuinely useless
@@ -276,6 +294,8 @@ export default function REELmunity() {
   // films you've watched/rated, or — if you're admin — everything site-wide).
   useEffect(() => {
     if (!cloud.enabled() || !user || !syncSettled) return;
+    if (caughtUpThisLoad.current) return; // belt-and-suspenders — see the ref declaration above
+    caughtUpThisLoad.current = true;
     (async () => {
       const lastChecked = (stateRef.current && stateRef.current.notifSeen && stateRef.current.notifSeen.lastCheckedAt) || null;
       const now = new Date().toISOString();
@@ -331,7 +351,15 @@ export default function REELmunity() {
       } catch { /* quiet — next load tries again from the same lastCheckedAt */ return; }
       setState(s => s ? { ...s, notifSeen: { ...(s.notifSeen || {}), lastCheckedAt: now } } : s);
     })();
-  }, [user, syncSettled]);
+    // user.id, not user — this is the one that actually matters most: unlike the
+    // subscriptions above (which just resume listening), this effect actively
+    // re-queries "everything since lastCheckedAt" and re-pushes a notification
+    // for every match, every single time it runs. A spurious re-run from a
+    // background token refresh — not a real sign-in — could re-notify about the
+    // exact same batch of activity again before the updated lastCheckedAt has
+    // even finished being read back on the next pass. This is very likely the
+    // actual cause of notifications repeating multiple times in one session.
+  }, [user && user.id, syncSettled]);
 
   // Live notifications: someone reacted to a post of yours. Reuses the same
   // events table analytics already writes to — see subscribeReactions in
@@ -348,7 +376,8 @@ export default function REELmunity() {
       });
     });
     return off;
-  }, [user]);
+    // Same reasoning as the comment/reply subscription above — user.id, not user.
+  }, [user && user.id]);
 
   // Once per app load: a quiet digest of new trending titles you haven't been told about yet.
   // "Seen" tracking lives in synced account state now (not local-only storage), so it can't
