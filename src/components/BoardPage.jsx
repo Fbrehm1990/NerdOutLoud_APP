@@ -246,7 +246,7 @@ export function BoardPage({ state, setState, user, goAccount, jumpFilmId, clearJ
                       <>
                         <div style={{ fontSize: 10, letterSpacing: "0.04em", textTransform: "uppercase", color: C.muted, whiteSpace: "nowrap" }}>User Ranking</div>
                         <div style={{
-                          fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, color: C.amber,
+                          fontFamily: "'Bebas Neue', sans-serif", fontSize: 20, color: C.amber,
                           textShadow: "0 0 10px rgba(255,182,39,0.3)", lineHeight: 1.1,
                         }}>{Number(cr.avg_rating).toFixed(1)}</div>
                         <div style={{ fontSize: 12, color: C.muted }}>{cr.rating_count} rating{cr.rating_count === 1 ? "" : "s"}</div>
@@ -258,7 +258,7 @@ export function BoardPage({ state, setState, user, goAccount, jumpFilmId, clearJ
                       <>
                         <div style={{ fontSize: 10, letterSpacing: "0.04em", textTransform: "uppercase", color: C.muted, whiteSpace: "nowrap" }}>My Ranking</div>
                         <div style={{
-                          fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, color: C.green, lineHeight: 1.1,
+                          fontFamily: "'Bebas Neue', sans-serif", fontSize: 20, color: C.green, lineHeight: 1.1,
                         }}>{f.rating.toFixed(1)}</div>
                       </>
                     ) : null}

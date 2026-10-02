@@ -260,6 +260,12 @@ export function Library({ state, setState, goToFilm }) {
                   textShadow: "0 0 10px rgba(255,182,39,0.3)", flexShrink: 0,
                 }}>{f.rating.toFixed(1)}</span>
               )}
+              {tab === "watchlist" && f.rating == null && (
+                <button type="button" className="nol-chip" style={{ flexShrink: 0 }}
+                  onClick={(e) => { e.stopPropagation(); goToFilm(f.id); }}>
+                  Rate it
+                </button>
+              )}
               <span className="nol-danger-link" style={{ flexShrink: 0 }}
                 onClick={(e) => { e.stopPropagation(); remove(f.id); }}>✕</span>
             </div>
