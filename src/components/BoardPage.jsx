@@ -240,7 +240,7 @@ export function BoardPage({ state, setState, user, goAccount, jumpFilmId, clearJ
                     </div>
                   )}
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 22, flexShrink: 0 }}>
+                <div className="nol-media-badges" style={{ display: "flex", alignItems: "center", gap: 22, flexShrink: 0 }}>
                   <div style={{ textAlign: "center", width: 72 }}>
                     {cr ? (
                       <>
